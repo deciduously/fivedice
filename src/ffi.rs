@@ -1,4 +1,4 @@
-// ffi.rs contains all JS<->Rust interfaces
+// ffi.rs contains all JS<->Rust interop
 
 use crate::{game::Game, CANVAS_X, CANVAS_Y};
 use js_sys::Math::{floor, random};

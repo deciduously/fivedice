@@ -1,20 +1,10 @@
 // game.rs contains the game logic
 
+use crate::draw::Drawable;
 use crate::ffi::{get_document, js_gen_range};
 
-use std::{fmt, str::FromStr};
+use std::fmt;
 use wasm_bindgen::{prelude::*, JsCast};
-
-// Trait representing things that can be drawn to the canvas
-trait Drawable {
-    // Draw this game element with the given top left corner
-    fn draw_at(
-        &self,
-        x: f64,
-        y: f64,
-        context: &web_sys::CanvasRenderingContext2d,
-    ) -> Result<(), JsValue>;
-}
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
@@ -73,8 +63,8 @@ impl fmt::Display for Score {
 }
 
 /// Each possible Die result
-#[derive(Debug)]
-enum RollResult {
+#[derive(Debug, Clone, Copy)]
+pub enum RollResult {
     One = 1,
     Two = 2,
     Three = 3,
@@ -84,10 +74,10 @@ enum RollResult {
 }
 
 /// A single Die, can be held or not
-#[derive(Debug)]
-struct Die {
-    value: RollResult,
-    held: bool,
+#[derive(Debug, Clone, Copy)]
+pub struct Die {
+    pub value: RollResult,
+    pub held: bool,
 }
 
 impl Die {
@@ -118,31 +108,6 @@ impl Die {
 impl fmt::Display for Die {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}{}", self.value, (if self.held { "X" } else { "" }))
-    }
-}
-
-impl Drawable for Die {
-    fn draw_at(
-        &self,
-        x: f64,
-        y: f64,
-        context: &web_sys::CanvasRenderingContext2d,
-    ) -> Result<(), JsValue> {
-        // you need to draw a rectangle
-        // Then, if it's held, change something?  set the font color?
-
-        context.begin_path();
-        context.rect(x, y, 40.0, 40.0);
-        context.set_font("12px Arial");
-        if self.held {
-            context.set_stroke_style(&JsValue::from_str("red"));
-        } else {
-            context.set_stroke_style(&JsValue::from_str("black"));
-        }
-        // TODO draw the dot pattern
-        context.fill_text(&format!("{:?}", self.value), x + 5.0, y + 20.0)?;
-        context.stroke();
-        Ok(())
     }
 }
 
@@ -204,14 +169,6 @@ enum Message {
     HoldDie(usize),
 }
 
-impl FromStr for Message {
-    type Err = std::io::Error;
-
-    fn from_str(_s: &str) -> Result<Self, Self::Err> {
-        Ok(Message::HoldDie(1)) // OBVIOUSLY TODO
-    }
-}
-
 /// The Game object
 #[derive(Debug)]
 pub struct Game {
@@ -224,8 +181,23 @@ impl Game {
     }
 
     /// Handle a click at canvasX, canvasY
-    pub fn handle_click(&mut self, _canvas_x: f64, _canvas_y: f64) {
-        self.reducer("whatever");
+    pub fn handle_click(&mut self, canvas_x: f64, canvas_y: f64) {
+        use Message::*;
+        // Check if it hit a die
+        for i in 0..HAND_SIZE {
+            if canvas_x >= 10.0 + (50.0 * i as f64)
+                && canvas_x <= 50.0 + (50.0 * i as f64)
+                && canvas_y >= 20.0
+                && canvas_y <= 60.0
+            {
+                self.reducer(HoldDie(i));
+            }
+        }
+    }
+
+    // Return all the current dice in play
+    pub fn get_hand(&self) -> [Die; HAND_SIZE] {
+        self.player.current_hand.dice
     }
 
     // Toggle one die on the player
@@ -247,22 +219,16 @@ impl Game {
             .unwrap()
             .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
-        // draw each die
-        for i in 0..HAND_SIZE {
-            self.player.current_hand.dice[i].draw_at((10 + (i * 50)) as f64, 20.0, &context)?;
-        }
-
+        self.draw_at(0.0, 0.0, &context)?;
         Ok(())
     }
 
     /// Handle all incoming messages
     /// TODO send an outgoing result?  Maybe use the memory tape for streaming events back
-    fn reducer(&mut self, msg_str: &str) {
+    fn reducer(&mut self, msg: Message) {
         use Message::*;
-        if let Ok(res) = Message::from_str(msg_str) {
-            match res {
-                HoldDie(idx) => self.hold_die(idx),
-            }
+        match msg {
+            HoldDie(idx) => self.hold_die(idx),
         }
     }
 }
