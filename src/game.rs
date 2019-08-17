@@ -70,7 +70,7 @@ enum RollResult {
 
 /// A single Die, can be held or not
 #[derive(Debug)]
-struct Die {
+pub struct Die {
     value: RollResult,
     held: bool,
 }
@@ -95,7 +95,7 @@ impl Die {
     }
 
     /// Toggles whether this die is held
-    fn toggle_held(&mut self) {
+    pub fn toggle_held(&mut self) {
         self.held = !self.held;
     }
 }
@@ -108,8 +108,8 @@ impl fmt::Display for Die {
 
 /// A set of 5 dice for a single play
 #[derive(Debug)]
-struct Hand {
-    dice: [Die; 5],
+pub struct Hand {
+    pub dice: [Die; 5],
 }
 
 impl Hand {
@@ -138,13 +138,13 @@ impl fmt::Display for Hand {
 
 /// The Player object
 #[derive(Debug)]
-struct Player {
+pub struct Player {
     score: Score,
-    current_hand: Hand,
+    pub current_hand: Hand,
 }
 
 impl Player {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             current_hand: Hand::new(),
             score: Score::new(),
@@ -155,25 +155,5 @@ impl Player {
 impl fmt::Display for Player {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} || {}", self.current_hand, self.score)
-    }
-}
-
-/// The Game object
-#[derive(Debug)]
-pub struct Game {
-    player: Player,
-}
-
-impl Game {
-    pub fn new() -> Self {
-        Self {
-            player: Player::new(),
-        }
-    }
-}
-
-impl fmt::Display for Game {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.player)
     }
 }
