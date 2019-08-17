@@ -1,6 +1,6 @@
 // ffi.rs contains all JS<->Rust interop
 
-use crate::{game::Game, CANVAS_X, CANVAS_Y};
+use crate::game::Game;
 use js_sys::Math::{floor, random};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
@@ -56,8 +56,8 @@ pub fn start() -> Result<(), JsValue> {
         .dyn_into::<web_sys::HtmlCanvasElement>()?;
 
     // Set canvas dimensions
-    canvas.set_width(CANVAS_X);
-    canvas.set_height(CANVAS_Y);
+    canvas.set_width(game.borrow().values.canvas_size.0);
+    canvas.set_height(game.borrow().values.canvas_size.1);
 
     // Add click listener
     // translate from page coords to canvas coords

@@ -1,6 +1,6 @@
 // game.rs contains the game logic
 
-use crate::draw::Drawable;
+use crate::draw::{Drawable, Values};
 use crate::ffi::{get_document, js_gen_range};
 
 use std::fmt;
@@ -173,6 +173,7 @@ enum Message {
 #[derive(Debug)]
 pub struct Game {
     player: Player,
+    pub values: Values,
 }
 
 impl Game {
@@ -184,9 +185,9 @@ impl Game {
     pub fn handle_click(&mut self, canvas_x: f64, canvas_y: f64) {
         use Message::*;
         // Check if it hit a die
-        let dice_dim = 40.0;
-        let dice_start_x = 10.0;
-        let dice_start_y = 20.0;
+        let dice_dim = self.values.die_dimension;
+        let dice_start_x = self.values.dice_origin.0;
+        let dice_start_y = self.values.dice_origin.1;
         let dice_padding = dice_dim + dice_start_x;
         for i in 0..HAND_SIZE {
             let die_start_x = dice_start_x + (dice_padding * i as f64);
@@ -225,7 +226,7 @@ impl Game {
             .unwrap()
             .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
-        self.draw_at(0.0, 0.0, &context)?;
+        self.draw_at(0.0, 0.0, &context, &self.values)?;
         Ok(())
     }
 
@@ -243,6 +244,7 @@ impl Default for Game {
     fn default() -> Self {
         Self {
             player: Player::new(),
+            values: Values::new(),
         }
     }
 }

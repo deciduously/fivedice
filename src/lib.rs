@@ -9,7 +9,3 @@ mod draw;
 mod ffi;
 // Game logic
 mod game;
-
-// Game screen dimensions
-const CANVAS_X: u32 = 800;
-const CANVAS_Y: u32 = 600;
