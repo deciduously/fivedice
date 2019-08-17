@@ -184,11 +184,17 @@ impl Game {
     pub fn handle_click(&mut self, canvas_x: f64, canvas_y: f64) {
         use Message::*;
         // Check if it hit a die
+        let dice_dim = 40.0;
+        let dice_start_x = 10.0;
+        let dice_start_y = 20.0;
+        let dice_padding = dice_dim + dice_start_x;
         for i in 0..HAND_SIZE {
-            if canvas_x >= 10.0 + (50.0 * i as f64)
-                && canvas_x <= 50.0 + (50.0 * i as f64)
-                && canvas_y >= 20.0
-                && canvas_y <= 60.0
+            let die_start_x = dice_start_x + (dice_padding * i as f64);
+            let die_end_x = dice_start_x + dice_dim + (dice_padding * i as f64);
+            if canvas_x >= die_start_x
+                && canvas_x <= die_end_x
+                && canvas_y >= dice_start_y
+                && canvas_y <= dice_start_y + dice_dim
             {
                 self.reducer(HoldDie(i));
             }

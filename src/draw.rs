@@ -23,8 +23,10 @@ impl Drawable for Die {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
 
+        let dim = 40.0;
+
         context.begin_path();
-        context.rect(x, y, 40.0, 40.0);
+        context.rect(x, y, dim, dim);
         context.set_font("12px Arial");
         if self.held {
             context.set_stroke_style(&JsValue::from_str("red"));
@@ -46,9 +48,17 @@ impl Drawable for Game {
         context: &web_sys::CanvasRenderingContext2d,
     ) -> Result<(), JsValue> {
         // draw each die
+        // TODO factor this out so that handle_click can reference the same data as draw_at
+        let dice_start_x = 10.0;
+        let dice_start_y = 20.0;
+        let dice_dim = 40.0;
         let dice = self.get_hand();
         for (i, item) in dice.iter().enumerate().take(HAND_SIZE) {
-            item.draw_at((10 + (i * 50)) as f64 + x, 20.0 + y, &context)?;
+            item.draw_at(
+                dice_start_x + (i as f64 * (dice_start_x + dice_dim)) + x,
+                dice_start_y + y,
+                &context,
+            )?;
         }
 
         Ok(())
