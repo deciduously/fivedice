@@ -18,7 +18,9 @@ macro_rules! append_text_child {
 }
 
 macro_rules! create_element_attrs {
-    ($document:ident, $type:expr, $( $attr:expr ),* ) => {{
+    ($document:ident, $type:expr, $( $attr:expr ),* ) => {
+        {
+        #[allow(clippy::let_and_return)]
         let el = $document.create_element($type)?;
         append_attrs!($document, el, $( $attr ),*);
         el}

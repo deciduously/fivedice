@@ -1,15 +1,33 @@
 // ffi.rs contains all JS<->Rust interfaces
 
-use crate::game::Player;
+use crate::{game::Game, CANVAS_X, CANVAS_Y};
 use js_sys::Math::{floor, random};
-use std::{fmt, str::FromStr};
-use wasm_bindgen::prelude::*;
-use web_sys::Document;
+use std::{cell::RefCell, rc::Rc};
+use wasm_bindgen::{prelude::*, JsCast};
+use web_sys::{Document, HtmlElement, Window};
+
+/// Grab the body
+pub fn get_body() -> HtmlElement {
+    get_document().body().expect("No <body> found in document")
+}
 
 /// Grab the document
-pub fn get_document() -> Result<Document, JsValue> {
-    let window = web_sys::window().unwrap();
-    Ok(window.document().unwrap())
+pub fn get_document() -> Document {
+    get_window()
+        .document()
+        .expect("No document found on window")
+}
+
+/// Grab the window
+pub fn get_window() -> Window {
+    web_sys::window().expect("No window found")
+}
+
+/// requestAnimationFrame
+pub fn request_animation_frame(f: &Closure<dyn FnMut()>) {
+    get_window()
+        .request_animation_frame(f.as_ref().unchecked_ref())
+        .expect("should register `requestAnimationFrame`");
 }
 
 /// use js Math.random() to get an integer in range [min, max)
@@ -17,97 +35,65 @@ pub fn js_gen_range(min: i64, max: i64) -> i64 {
     (floor(random() * (max as f64 - min as f64)) + min as f64) as i64
 }
 
-// All the various ways the game can be interacted with
-pub enum Message {
-    HoldDie(usize),
-}
+/// Entrypoint for the module
+#[wasm_bindgen(start)]
+pub fn start() -> Result<(), JsValue> {
+    // Instantiate game object
+    let game = Rc::new(RefCell::new(Game::new()));
 
-impl FromStr for Message {
-    type Err = std::io::Error;
+    // Mount the canvas elements
+    let document = get_document();
+    let body = get_body();
+    // Mount the title and canvas elements
+    append_text_element_attrs!(document, body, "h1", "FIVE DICE",);
+    append_element_attrs!(document, body, "canvas",);
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Message::HoldDie(1)) // OBVIOUSLY TODO
-    }
-}
+    // Set up the height
+    let canvas = document
+        .query_selector("canvas")?
+        .unwrap()
+        .dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-/// Controls for mounting
-#[derive(Debug)]
-enum GameState {
-    Playing,
-    Unmounted,
-}
+    // Set canvas height
+    canvas.set_width(CANVAS_X);
+    canvas.set_height(CANVAS_Y);
 
-/// The Game object
-#[wasm_bindgen]
-#[repr(C)]
-#[derive(Debug)]
-pub struct Game {
-    gamestate: GameState,
-    player: Player,
-}
+    // Add click listener
+    // translate from page coords to canvas coords
+    // shamelessly lifted from the RustWasm book but translated to Rust
+    // https://rustwasm.github.io/book/game-of-life/interactivity.html
+    {
+        let game = game.clone();
+        let callback = Closure::wrap(Box::new(move |evt: web_sys::MouseEvent| {
+            let canvas = get_document()
+                .query_selector("canvas")
+                .expect("Could not find game screen")
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .expect("Could not find game canvas");
+            let bounding_rect = canvas.get_bounding_client_rect();
+            let scale_x = canvas.width() as f64 / bounding_rect.width();
+            let scale_y = canvas.height() as f64 / bounding_rect.height();
 
-#[wasm_bindgen]
-impl Game {
-    #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
-        Self {
-            gamestate: GameState::Unmounted,
-            player: Player::new(),
-        }
-    }
+            let canvas_x = (evt.client_x() as f64 - bounding_rect.left()) * scale_x;
+            let canvas_y = (evt.client_y() as f64 - bounding_rect.top()) * scale_y;
 
-    // Toggle one die on the player
-    fn hold_die(&mut self, die_idx: usize) {
-        if die_idx < self.player.current_hand.dice.len() {
-            self.player.current_hand.dice[die_idx].toggle_held();
-        }
-    }
+            game.borrow_mut().handle_click(canvas_x, canvas_y);
+        }) as Box<dyn FnMut(_)>);
 
-    /// Redraw the screen
-    pub fn draw(&self) -> Result<(), JsValue> {
-        let document = get_document()?;
-        let display_output = document.query_selector("#display-output")?.unwrap();
-        display_output.set_text_content(Some(&format!("{}", self)));
-        Ok(())
+        canvas.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
+        callback.forget();
     }
 
-    /// Mount the DOM representation
-    // TODO only do once- set a state?
-    pub fn mount(&mut self) -> Result<(), JsValue> {
-        match self.gamestate {
-            GameState::Unmounted => {
-                let document = get_document()?;
-                let body = document.body().unwrap();
-                append_text_element_attrs!(document, body, "h1", "FIVE DICE",);
-                append_text_element_attrs!(
-                    document,
-                    body,
-                    "span",
-                    &format!("{}", self),
-                    ("id", "display-output")
-                );
-                self.gamestate = GameState::Playing;
-                Ok(())
-            }
-            // TODO Error??
-            _ => Ok(()),
-        }
-    }
-
-    /// Handle all incoming messages
-    /// TODO send an outgoing result?
-    pub fn reducer(&mut self, msg_str: &str) {
-        use Message::*;
-        if let Ok(res) = Message::from_str(msg_str) {
-            match res {
-                HoldDie(idx) => self.hold_die(idx),
-            }
-        }
-    }
-}
-
-impl fmt::Display for Game {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.player)
-    }
+    // Run the game loop
+    // All iterations inside the loop can use the Rc.  Starts out empty
+    let f = Rc::new(RefCell::new(None));
+    let g = f.clone();
+    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        game.borrow().draw().expect("Could not draw game");
+        request_animation_frame(f.borrow().as_ref().unwrap());
+    }) as Box<dyn FnMut()>));
+    // Kick off the loop
+    request_animation_frame(g.borrow().as_ref().unwrap());
+    Ok(())
 }

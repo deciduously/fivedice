@@ -1,8 +1,12 @@
 // game.rs contains the game logic
 
-use crate::ffi::js_gen_range;
+use crate::ffi::{get_document, js_gen_range};
 
-use std::fmt;
+use std::{fmt, str::FromStr};
+use wasm_bindgen::{prelude::*, JsCast};
+
+// Number of dice in a turn
+pub const HAND_SIZE: usize = 5;
 
 /// A single player's score object
 #[derive(Debug)]
@@ -51,7 +55,7 @@ impl Default for Score {
 }
 
 impl fmt::Display for Score {
-    // TODO make this nice - low prio
+    // TODO make this nice - low priority
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SCORE")
     }
@@ -70,7 +74,7 @@ enum RollResult {
 
 /// A single Die, can be held or not
 #[derive(Debug)]
-pub struct Die {
+struct Die {
     value: RollResult,
     held: bool,
 }
@@ -108,13 +112,14 @@ impl fmt::Display for Die {
 
 /// A set of 5 dice for a single play
 #[derive(Debug)]
-pub struct Hand {
-    pub dice: [Die; 5],
+struct Hand {
+    dice: [Die; HAND_SIZE],
 }
 
 impl Hand {
     fn new() -> Self {
         Self {
+            // HAND_SIZE is hard-coded to 5 - this doesn't work otherwise
             dice: [
                 Die::get_random(),
                 Die::get_random(),
@@ -138,13 +143,13 @@ impl fmt::Display for Hand {
 
 /// The Player object
 #[derive(Debug)]
-pub struct Player {
+struct Player {
     score: Score,
-    pub current_hand: Hand,
+    current_hand: Hand,
 }
 
 impl Player {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             current_hand: Hand::new(),
             score: Score::new(),
@@ -155,5 +160,84 @@ impl Player {
 impl fmt::Display for Player {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} || {}", self.current_hand, self.score)
+    }
+}
+
+// All the various ways the game can be interacted with
+enum Message {
+    HoldDie(usize),
+}
+
+impl FromStr for Message {
+    type Err = std::io::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Message::HoldDie(1)) // OBVIOUSLY TODO
+    }
+}
+
+/// The Game object
+#[derive(Debug)]
+pub struct Game {
+    player: Player,
+}
+
+impl Game {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Handle a click at canvasX, canvasY
+    pub fn handle_click(&mut self, _canvas_x: f64, _canvas_y: f64) {
+        self.reducer("whatever");
+    }
+
+    // Toggle one die on the player
+    fn hold_die(&mut self, die_idx: usize) {
+        if die_idx < HAND_SIZE {
+            self.player.current_hand.dice[die_idx].toggle_held();
+        }
+    }
+
+    /// Redraw the screen
+    pub fn draw(&self) -> Result<(), JsValue> {
+        let document = get_document();
+        let canvas = document
+            .query_selector("canvas")?
+            .unwrap()
+            .dyn_into::<web_sys::HtmlCanvasElement>()?;
+        let context = canvas
+            .get_context("2d")?
+            .unwrap()
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
+        context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
+        context.set_font("20px Arial");
+        context.fill_text(&format!("{}", self), 10.0, 50.0)?;
+        Ok(())
+    }
+
+    /// Handle all incoming messages
+    /// TODO send an outgoing result?  Maybe use the memory tape for streaming events back
+    fn reducer(&mut self, msg_str: &str) {
+        use Message::*;
+        if let Ok(res) = Message::from_str(msg_str) {
+            match res {
+                HoldDie(idx) => self.hold_die(idx),
+            }
+        }
+    }
+}
+
+impl Default for Game {
+    fn default() -> Self {
+        Self {
+            player: Player::new(),
+        }
+    }
+}
+
+impl fmt::Display for Game {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.player)
     }
 }

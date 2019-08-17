@@ -20,9 +20,17 @@ version = "0.3"
 version = "0.3"
 features = [
     "Attr",
+    "CanvasRenderingContext2d",
     "Document",
+    "DomRect",
+    "DomRectReadOnly",
     "Element",
+    "Event",
+    "EventTarget",
+    "HtmlCanvasElement",
     "HtmlElement",
+    "HtmlInputElement",
+    "MouseEvent",
     "Node",
     "Text",
     "Window"
