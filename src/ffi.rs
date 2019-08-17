@@ -36,6 +36,7 @@ pub fn js_gen_range(min: i64, max: i64) -> i64 {
 }
 
 /// Entrypoint for the module
+#[allow(dead_code)]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     // Instantiate game object
@@ -54,7 +55,7 @@ pub fn start() -> Result<(), JsValue> {
         .unwrap()
         .dyn_into::<web_sys::HtmlCanvasElement>()?;
 
-    // Set canvas height
+    // Set canvas dimensions
     canvas.set_width(CANVAS_X);
     canvas.set_height(CANVAS_Y);
 
@@ -72,11 +73,11 @@ pub fn start() -> Result<(), JsValue> {
                 .dyn_into::<web_sys::HtmlCanvasElement>()
                 .expect("Could not find game canvas");
             let bounding_rect = canvas.get_bounding_client_rect();
-            let scale_x = canvas.width() as f64 / bounding_rect.width();
-            let scale_y = canvas.height() as f64 / bounding_rect.height();
+            let scale_x = f64::from(canvas.width()) / bounding_rect.width();
+            let scale_y = f64::from(canvas.height()) / bounding_rect.height();
 
-            let canvas_x = (evt.client_x() as f64 - bounding_rect.left()) * scale_x;
-            let canvas_y = (evt.client_y() as f64 - bounding_rect.top()) * scale_y;
+            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
+            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
 
             game.borrow_mut().handle_click(canvas_x, canvas_y);
         }) as Box<dyn FnMut(_)>);

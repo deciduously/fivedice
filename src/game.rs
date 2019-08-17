@@ -5,6 +5,17 @@ use crate::ffi::{get_document, js_gen_range};
 use std::{fmt, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast};
 
+// Trait representing things that can be drawn to the canvas
+trait Drawable {
+    // Draw this game element with the given top left corner
+    fn draw_at(
+        &self,
+        x: f64,
+        y: f64,
+        context: &web_sys::CanvasRenderingContext2d,
+    ) -> Result<(), JsValue>;
+}
+
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
 
@@ -110,6 +121,31 @@ impl fmt::Display for Die {
     }
 }
 
+impl Drawable for Die {
+    fn draw_at(
+        &self,
+        x: f64,
+        y: f64,
+        context: &web_sys::CanvasRenderingContext2d,
+    ) -> Result<(), JsValue> {
+        // you need to draw a rectangle
+        // Then, if it's held, change something?  set the font color?
+
+        context.begin_path();
+        context.rect(x, y, 40.0, 40.0);
+        context.set_font("12px Arial");
+        if self.held {
+            context.set_stroke_style(&JsValue::from_str("red"));
+        } else {
+            context.set_stroke_style(&JsValue::from_str("black"));
+        }
+        // TODO draw the dot pattern
+        context.fill_text(&format!("{:?}", self.value), x + 5.0, y + 20.0)?;
+        context.stroke();
+        Ok(())
+    }
+}
+
 /// A set of 5 dice for a single play
 #[derive(Debug)]
 struct Hand {
@@ -171,7 +207,7 @@ enum Message {
 impl FromStr for Message {
     type Err = std::io::Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(_s: &str) -> Result<Self, Self::Err> {
         Ok(Message::HoldDie(1)) // OBVIOUSLY TODO
     }
 }
@@ -211,8 +247,11 @@ impl Game {
             .unwrap()
             .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
         context.clear_rect(0.0, 0.0, canvas.width().into(), canvas.height().into());
-        context.set_font("20px Arial");
-        context.fill_text(&format!("{}", self), 10.0, 50.0)?;
+        // draw each die
+        for i in 0..HAND_SIZE {
+            self.player.current_hand.dice[i].draw_at((10 + (i * 50)) as f64, 20.0, &context)?;
+        }
+
         Ok(())
     }
 
