@@ -9,6 +9,7 @@ repository = "https://github.com/deciduously/fivedice.git"
 
 [lib]
 crate-type = ["cdylib"]
+path = "src/wasm/lib.rs"
 
 [dependencies]
 js-sys = "0.3"

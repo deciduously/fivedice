@@ -2,4 +2,5 @@
 **/*.rs.bk
 **/node_modules
 **/dist
+**/pkg
 .vscode

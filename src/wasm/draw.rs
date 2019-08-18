@@ -149,6 +149,10 @@ pub trait Drawable {
     ) -> Result<(), JsValue>;
 }
 
+// TODO lump handleclick in?  trait Clickable inherits from Drawable - only Drawable things are Clickable
+// The method returns an Option<Message> - takes x and y?
+// maybe kill the offset this is where we return corners??
+
 impl Drawable for Die {
     fn draw_at(
         &self,
