@@ -4,7 +4,7 @@ use crate::game::Game;
 use js_sys::Math::{floor, random};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
-use web_sys::{Document, HtmlElement, Window};
+use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, Window};
 
 /// Grab the body
 pub fn get_body() -> HtmlElement {
@@ -16,6 +16,21 @@ pub fn get_document() -> Document {
     get_window()
         .document()
         .expect("No document found on window")
+}
+
+/// Grab the rendering context - panics if used before mounting!
+pub fn get_context() -> CanvasRenderingContext2d {
+    get_body()
+        .query_selector("canvas")
+        .expect("No canvas element found in DOM")
+        .unwrap()
+        .dyn_into::<HtmlCanvasElement>()
+        .expect("Canvas tag unreadable")
+        .get_context("2d")
+        .expect("Could not get context from canvas")
+        .unwrap()
+        .dyn_into::<CanvasRenderingContext2d>()
+        .expect("Render context unreadable")
 }
 
 /// Grab the window

@@ -31,5 +31,6 @@ features = [
     "MouseEvent",
     "Node",
     "Text",
+    "TextMetrics",
     "Window"
 ]
