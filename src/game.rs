@@ -3,7 +3,7 @@
 use crate::draw::{Drawable, Values};
 use crate::ffi::{get_context, js_gen_range};
 
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::prelude::*;
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
@@ -110,13 +110,30 @@ impl Die {
 }
 
 /// A set of 5 dice for a single play
-#[derive(Debug)]
-struct Hand {
-    dice: [Die; HAND_SIZE],
+#[derive(Debug, Clone, Copy)]
+pub struct Hand {
+    pub dice: [Die; HAND_SIZE],
+    pub remaining_rolls: u8,
 }
 
 impl Hand {
     fn new() -> Self {
+        Self::default()
+    }
+
+    /// all unheld dice if there are rolls left
+    pub fn roll(&mut self) {
+        if self.remaining_rolls > 0 {
+            for die in self.dice.iter_mut() {
+                die.roll();
+            }
+            self.remaining_rolls -= 1;
+        }
+    }
+}
+
+impl Default for Hand {
+    fn default() -> Self {
         Self {
             // HAND_SIZE is hard-coded to 5 - this doesn't work otherwise
             dice: [
@@ -126,6 +143,7 @@ impl Hand {
                 Die::get_random(),
                 Die::get_random(),
             ],
+            remaining_rolls: 3,
         }
     }
 }
@@ -150,6 +168,7 @@ impl Player {
 enum Message {
     HoldDie(usize),
     RollDice,
+    StartOver,
 }
 
 /// The Game object
@@ -166,7 +185,7 @@ impl Game {
         Self::default()
     }
 
-    // If the given coordinates fall in a given region execute f
+    // Detect if the given coordinates fall in a given region
     fn detect_region(
         &mut self,
         x: f64,
@@ -176,11 +195,7 @@ impl Game {
         bottom_right_x: f64,
         bottom_right_y: f64,
     ) -> bool {
-        if x >= top_left_x && x <= bottom_right_x && y >= top_left_y && y <= bottom_right_y {
-            true
-        } else {
-            false
-        }
+        x >= top_left_x && x <= bottom_right_x && y >= top_left_y && y <= bottom_right_y
     }
 
     /// Handle a click at canvasX, canvasY
@@ -189,8 +204,8 @@ impl Game {
         // Check if it hit a die
         // grab relevant dimensions from the values struct
         let dice_dim = self.values.die_dimension;
-        let dice_start_x = self.values.dice_origin.0;
-        let dice_start_y = self.values.dice_origin.1;
+        let dice_start_x = self.values.dice_origin().0;
+        let dice_start_y = self.values.dice_origin().1;
         let dice_padding = dice_dim + self.values.padding;
         // check if hit given is in each die's boundary
         for i in 0..HAND_SIZE {
@@ -209,10 +224,10 @@ impl Game {
             }
         }
 
+        let context = get_context();
+
         // check if we hit the Roll button
-        let roll_button_corners = self.values.reroll_button_corners(&get_context());
-        let top_left = roll_button_corners.0;
-        let bottom_right = roll_button_corners.1;
+        let (top_left, bottom_right) = self.values.reroll_button_corners(&context);
         if self.detect_region(
             click_x,
             click_y,
@@ -223,11 +238,24 @@ impl Game {
         ) {
             self.reducer(RollDice);
         }
+
+        // check if we hit the Start Over button
+        let (top_left, bottom_right) = self.values.start_over_button_corners(&context);
+        if self.detect_region(
+            click_x,
+            click_y,
+            top_left.0,
+            top_left.1,
+            bottom_right.0,
+            bottom_right.1,
+        ) {
+            self.reducer(StartOver);
+        }
     }
 
     // Return all the current dice in play
-    pub fn get_hand(&self) -> [Die; HAND_SIZE] {
-        self.player.current_hand.dice
+    pub fn get_hand(&self) -> Hand {
+        self.player.current_hand
     }
 
     // Toggle one die on the player
@@ -257,14 +285,18 @@ impl Game {
         match msg {
             HoldDie(idx) => self.hold_die(idx),
             RollDice => self.roll_dice(),
+            StartOver => self.reset(),
         }
+    }
+
+    /// Start a fresh new game
+    fn reset(&mut self) {
+        self.player = Player::new();
     }
 
     /// Roll all unheld dice
     fn roll_dice(&mut self) {
-        for die in self.player.current_hand.dice.iter_mut() {
-            die.roll();
-        }
+        self.player.current_hand.roll();
     }
 }
 
