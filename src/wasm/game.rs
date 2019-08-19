@@ -1,7 +1,11 @@
 // game.rs contains the game logic
 
-use crate::draw::{Drawable, Values};
-use crate::ffi::{get_context, js_gen_range};
+use crate::{
+    context::Context,
+    draw::{draw_button, draw_text, Drawable, Point},
+    error::*,
+    ffi::js_gen_range,
+};
 
 use wasm_bindgen::prelude::*;
 
@@ -67,9 +71,9 @@ pub enum RollResult {
 
 /// A single Die, can be held or not
 #[derive(Debug, Clone, Copy)]
-pub struct Die {
-    pub value: RollResult,
-    pub held: bool,
+struct Die {
+    value: RollResult,
+    held: bool,
 }
 
 impl Die {
@@ -96,16 +100,47 @@ impl Die {
         }
     }
 
-    /// Roll this die - no acction if currently held
-    pub fn roll(&mut self) {
+    /// Roll this die - no action if currently held
+    fn roll(&mut self) {
         if !self.held {
             self.value = Self::get_random_result();
         }
     }
 
     /// Toggles whether this die is held
-    pub fn toggle_held(&mut self) {
+    fn toggle_held(&mut self) {
         self.held = !self.held;
+    }
+}
+
+impl Drawable for Die {
+    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
+        // extract context pointers
+        let ctx = context.ctx;
+        let values = context.values;
+        // draw a rectangle
+        // if it's held, set the font color to red, otherwise black
+        ctx.begin_path();
+        ctx.rect(
+            top_left.x,
+            top_left.y,
+            values.die_dimension,
+            values.die_dimension,
+        );
+        ctx.set_font("12px Arial");
+        if self.held {
+            ctx.set_stroke_style(&JsValue::from_str("red"));
+        } else {
+            ctx.set_stroke_style(&JsValue::from_str(values.button_color));
+        }
+        // TODO draw the dot pattern
+        ctx.fill_text(
+            &format!("{:?}", self.value),
+            top_left.x + (values.padding / 2.0),
+            top_left.y + (values.die_dimension / 2.0),
+        )?;
+        ctx.stroke();
+        Ok(())
     }
 }
 
@@ -148,6 +183,52 @@ impl Default for Hand {
     }
 }
 
+impl Drawable for Hand {
+    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
+        // Access context
+        let ctx = context.ctx;
+        let values = context.values;
+        // draw each die
+        for (i, item) in self.dice.iter().enumerate().take(HAND_SIZE) {
+            // draw each die taking into account offsets for die index and global game offset
+            item.draw_at(
+                (
+                    values.dice_origin().0
+                        + (i as f64 * (values.dice_origin().0 + values.die_dimension)
+                            + values.padding)
+                        + top_left.x,
+                    values.dice_origin().1 + top_left.y,
+                )
+                    .into(),
+                &context,
+            )?;
+        }
+
+        // draw the Reroll button
+        let reroll_button_corners = values.reroll_button_corners(ctx);
+        let reroll_button_top_left = reroll_button_corners.0;
+        let reroll_button_bottom_right = reroll_button_corners.1;
+        draw_button(
+            values.reroll_button_text,
+            reroll_button_top_left.into(),
+            context,
+        )?;
+
+        // Draw remaining rolls readout
+        let remaining_rolls_x = (reroll_button_bottom_right.0 - reroll_button_top_left.0)
+            + (values.padding * 2.0)
+            + values.padding;
+        let remaining_rolls_y = reroll_button_bottom_right.1;
+        draw_text(
+            &format!("Rolls left: {}", self.remaining_rolls),
+            (remaining_rolls_x, remaining_rolls_y).into(),
+            ctx,
+        )?;
+
+        Ok(())
+    }
+}
+
 /// The Player object
 #[derive(Debug)]
 struct Player {
@@ -177,12 +258,15 @@ pub struct Game {
     // For now, just a solo game
     player: Player,
     // The layout constants to use
-    pub values: Values,
+    pub context: Context,
 }
 
 impl Game {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            player: Player::new(),
+            context: Context::new(),
+        }
     }
 
     // Detect if the given coordinates fall in a given region
@@ -199,14 +283,21 @@ impl Game {
     }
 
     /// Handle a click at canvasX, canvasY
-    pub fn handle_click(&mut self, click_x: f64, click_y: f64) {
+    pub fn handle_click(
+        &mut self,
+        click_x: f64,
+        click_y: f64,
+        ctx: &web_sys::CanvasRenderingContext2d,
+    ) {
         use Message::*;
+        // Will be moved to Clickable, bot for now...
+        let values = self.context.values;
         // Check if it hit a die
         // grab relevant dimensions from the values struct
-        let dice_dim = self.values.die_dimension;
-        let dice_start_x = self.values.dice_origin().0;
-        let dice_start_y = self.values.dice_origin().1;
-        let dice_padding = dice_dim + self.values.padding;
+        let dice_dim = values.die_dimension;
+        let dice_start_x = values.dice_origin().0;
+        let dice_start_y = values.dice_origin().1;
+        let dice_padding = dice_dim + values.padding;
         // check if hit given is in each die's boundary
         for i in 0..HAND_SIZE {
             let die_start_x = dice_start_x + (dice_padding * i as f64);
@@ -224,10 +315,8 @@ impl Game {
             }
         }
 
-        let context = get_context();
-
         // check if we hit the Roll button
-        let (top_left, bottom_right) = self.values.reroll_button_corners(&context);
+        let (top_left, bottom_right) = values.reroll_button_corners(&ctx);
         if self.detect_region(
             click_x,
             click_y,
@@ -240,7 +329,7 @@ impl Game {
         }
 
         // check if we hit the Start Over button
-        let (top_left, bottom_right) = self.values.start_over_button_corners(&context);
+        let (top_left, bottom_right) = values.start_over_button_corners(&ctx);
         if self.detect_region(
             click_x,
             click_y,
@@ -266,15 +355,16 @@ impl Game {
     }
 
     /// Redraw the screen
-    pub fn draw(&self) -> Result<(), JsValue> {
-        let context = get_context();
-        context.clear_rect(
+    pub fn draw(&self) -> Result<()> {
+        let ctx = self.context.ctx;
+        let values = self.context.values;
+        ctx.clear_rect(
             0.0,
             0.0,
-            self.values.canvas_size.0.into(),
-            self.values.canvas_size.1.into(),
+            values.canvas_size.0.into(),
+            values.canvas_size.1.into(),
         );
-        self.draw_at(0.0, 0.0, &context, &self.values)?;
+        self.draw_at((0.0, 0.0).into(), &self.context)?;
         Ok(())
     }
 
@@ -300,11 +390,15 @@ impl Game {
     }
 }
 
-impl Default for Game {
-    fn default() -> Self {
-        Self {
-            player: Player::new(),
-            values: Values::new(),
-        }
+impl Drawable for Game {
+    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
+        // draw current hand
+        self.get_hand().draw_at(top_left, context)?;
+
+        // draw start over button
+        let start_over_top_left = context.values.start_over_button_corners(context.ctx).0;
+        draw_button("Start Over", start_over_top_left.into(), context)?;
+
+        Ok(())
     }
 }

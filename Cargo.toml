@@ -1,37 +1,19 @@
 [package]
 authors = ["deciduously <ben@deciduously.com>"]
-edition = "2018"
-name = "fivedice"
 description = "WASM Yahtzee"
-version = "0.1.0"
+edition = "2018"
 license = "MIT"
+name = "fivedice"
 repository = "https://github.com/deciduously/fivedice.git"
-
-[lib]
-crate-type = ["cdylib"]
-path = "src/wasm/lib.rs"
-
+version = "0.1.0"
 [dependencies]
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 
 [dependencies.web-sys]
+features = ["Attr", "CanvasRenderingContext2d", "Document", "DomRect", "DomRectReadOnly", "Element", "Event", "EventTarget", "HtmlCanvasElement", "HtmlElement", "HtmlInputElement", "MouseEvent", "Node", "Text", "TextMetrics", "Window"]
 version = "0.3"
-features = [
-    "Attr",
-    "CanvasRenderingContext2d",
-    "Document",
-    "DomRect",
-    "DomRectReadOnly",
-    "Element",
-    "Event",
-    "EventTarget",
-    "HtmlCanvasElement",
-    "HtmlElement",
-    "HtmlInputElement",
-    "MouseEvent",
-    "Node",
-    "Text",
-    "TextMetrics",
-    "Window"
-]
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/wasm/lib.rs"

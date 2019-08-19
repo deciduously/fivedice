@@ -11,26 +11,21 @@ pub fn get_body() -> HtmlElement {
     get_document().body().expect("No <body> found in document")
 }
 
+/// Grab the canvas
+pub fn get_canvas() -> HtmlCanvasElement {
+    get_body()
+        .query_selector("canvas")
+        .expect("Could not find <canvas>")
+        .unwrap()
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .expect("Could not decipher canvas")
+}
+
 /// Grab the document
 pub fn get_document() -> Document {
     get_window()
         .document()
         .expect("No document found on window")
-}
-
-/// Grab the rendering context - panics if used before mounting!
-pub fn get_context() -> CanvasRenderingContext2d {
-    get_body()
-        .query_selector("canvas")
-        .expect("No canvas element found in DOM")
-        .unwrap()
-        .dyn_into::<HtmlCanvasElement>()
-        .expect("Canvas tag unreadable")
-        .get_context("2d")
-        .expect("Could not get context from canvas")
-        .unwrap()
-        .dyn_into::<CanvasRenderingContext2d>()
-        .expect("Render context unreadable")
 }
 
 /// Grab the window
@@ -53,11 +48,8 @@ pub fn js_gen_range(min: i64, max: i64) -> i64 {
 /// Entrypoint for the module
 #[allow(dead_code)]
 #[wasm_bindgen(start)]
-pub fn start() -> Result<(), JsValue> {
-    // Instantiate game object
-    let game = Rc::new(RefCell::new(Game::new()));
-
-    // Mount the canvas elements
+pub fn start() {
+    // Set canvas dimensions
     let document = get_document();
     let body = get_body();
     // Mount the title and canvas elements
@@ -66,13 +58,20 @@ pub fn start() -> Result<(), JsValue> {
 
     // Set up the height
     let canvas = document
-        .query_selector("canvas")?
+        .query_selector("canvas")
+        .expect("Could not find <canvas>")
         .unwrap()
-        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .expect("Could not decipher canvas");
+    let context = canvas
+        .dyn_into::<CanvasRenderingContext2d>()
+        .expect("Could not decipher render context");
 
-    // Set canvas dimensions
-    canvas.set_width(game.borrow().values.canvas_size.0);
-    canvas.set_height(game.borrow().values.canvas_size.1);
+    // Instantiate game
+    let game = Rc::new(RefCell::new(Game::new()));
+
+    canvas.set_width(game.borrow().context.values.canvas_size.0);
+    canvas.set_height(game.borrow().context.values.canvas_size.1);
 
     // Add click listener
     // translate from page coords to canvas coords
@@ -97,7 +96,9 @@ pub fn start() -> Result<(), JsValue> {
             game.borrow_mut().handle_click(canvas_x, canvas_y);
         }) as Box<dyn FnMut(_)>);
 
-        canvas.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
+        canvas
+            .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
+            .expect("Could not register event listener");
         callback.forget();
     }
 
@@ -111,5 +112,4 @@ pub fn start() -> Result<(), JsValue> {
     }) as Box<dyn FnMut()>));
     // Kick off the loop
     request_animation_frame(g.borrow().as_ref().unwrap());
-    Ok(())
 }
