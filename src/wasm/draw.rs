@@ -53,6 +53,8 @@ impl From<(f64, f64, f64, f64)> for Region {
 }
 
 /// Trait representing things that can be drawn to the canvas
+/// Each frame the whole tree is re-mounted
+/// It will have child Drawable widgets
 pub trait Drawable {
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
@@ -64,12 +66,10 @@ pub trait Drawable {
     ) -> Result<Point>;
     /// Return the origin, width, and height of this element
     fn get_region(&self) -> Region;
-}
-
-/// Trait representing Drawables that have been given a fixed position on the canvas
-trait MountedDrawable: Drawable {
-    // Draw this mounted component.  Uses its own stored position and references
-    fn draw(&self, context: &Context);
+    /// Return all drawables this Drawable contains
+    fn get_widgets(&self) -> Vec<Box<dyn Drawable>>;
+    /// Mount this Drawable with a given position
+    fn mount(&self, top_left: Point) -> Vec<Box<MountedDrawable>>;
 }
 
 /// Trait representing Drawables that can be clicked
@@ -81,32 +81,38 @@ pub trait Clickable {
 }
 
 /// Wrapper struct for a Drawable that has been mounted to the canvas
-struct Mounted<D>
-where
-    D: Drawable,
+struct MountedDrawable
 {
+    cursor: Point,
     region: Region,
-    drawable: D,
+    drawable: Box<dyn Drawable>,
 }
 
-impl<D> Mounted<D>
-where
-    D: Drawable,
+impl MountedDrawable
 {
-    fn new(drawable: D, top_left: Point) -> Self {
+    fn new(drawable: Box<dyn Drawable>, top_left: Point) -> Self {
         Self {
+            cursor: drawable.get_region().origin,
             drawable,
-            // TODO how to get width/hieght?
+            // TODO how to get width/height?
             region: (top_left, 10.0, 10.0).into(),
         }
     }
+
+    /// Draw this element and update the cursor
+    fn draw(&self, context: &Context, ctx: &CanvasRenderingContext2d) {
+        // Draw all constituent wdigets, updating the cursor after each
+        self.cursor = self.draw_at(self.region.origin, context, ctx).unwrap();
+    }
+
+    /// Return the next drawing position
+    fn get_cursor_pos(&self) -> Point {
+        self.cursor
+    }
 }
 
-impl<D> Drawable for Mounted<D>
-where
-    D: Drawable,
-{
-    fn draw_at(
+impl Drawable for MountedDrawable {
+        fn draw_at(
         &self,
         top_left: Point,
         context: &Context,
@@ -117,22 +123,16 @@ where
     fn get_region(&self) -> Region {
         self.drawable.get_region()
     }
-}
 
-impl<D> MountedDrawable for Mounted<D>
-where
-    D: Drawable,
-{
-    fn draw(&self, context: &Context) {
-        self.drawable.draw_at(self.region.origin, context);
+    fn mount(&self, top_left: Point) -> Vec<Box<MountedDrawable>> {
+
     }
 }
 
 /// Top-level canvas engine object
 pub struct CanvasEngine {
     canvas: Box<HtmlCanvasElement>,
-    elements: Vec<Box<dyn MountedDrawable>>,
-    widget: Option<Box<dyn Drawable>>,
+    elements: Vec<MountedDrawable>,
 }
 
 impl CanvasEngine {
@@ -161,11 +161,22 @@ impl CanvasEngine {
     }
 
     /// Mount widget
-    pub fn mount(&mut self) {
+    pub fn mount(&mut self, w: Box<dyn Drawable>) {
         // you've got to mount all the elements
         // somehow go through the widgets recursively
         // so each widget needs to return its children
         // with absolute positions
+        
+        // Mount the drawable and push it
+        self.elements.push(MountedDrawable::new(w, self.get_cursor_pos()));
+    }
+
+    /// Get the next cursor position
+    // TODO add padding
+    fn get_cursor_pos(&self) -> Point {
+        // last widget's bottrom right.  X to 0 (or values.padding), Y to that dot + padding
+        let last_drawn_region = self.elements[self.elements.len() - 1].get_region();
+        (0.0, last_drawn_region.origin.y + last_drawn_region.height).into()
     }
 }
 
@@ -174,7 +185,6 @@ impl Default for CanvasEngine {
         Self {
             canvas: Box::new(get_canvas()),
             elements: Vec::new(),
-            widget: None,
         }
     }
 }

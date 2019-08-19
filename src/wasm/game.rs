@@ -392,13 +392,20 @@ impl Game {
 
 impl Drawable for Game {
     fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
-        // draw current hand
-        self.get_hand().draw_at(top_left, context)?;
+        // get child widgets
+        let widgets = self.get_widgets();
+        // draw current widgets
+        for widget in widgets {
+            widget.draw_at(self.get_current_pos(), context, ctx);
+        }
 
         // draw start over button
         let start_over_top_left = context.values.start_over_button_corners(context.ctx).0;
         draw_button("Start Over", start_over_top_left.into(), context)?;
 
         Ok(())
+    }
+    fn get_widgets(&self) -> Vec<Box<dyn Drawable>> {
+        vec![Box::new(self.get_hand())]
     }
 }
