@@ -1,7 +1,7 @@
 // game.rs contains the game logic
 
 use crate::{
-    draw::{Drawable, Point, Region, Values},
+    draw::{Drawable, Point, Region, VALUES},
     error::*,
     ffi::js_gen_range,
 };
@@ -97,7 +97,6 @@ impl Drawable for Die {
         &self,
         top_left: Point,
         ctx: &CanvasRenderingContext2d,
-        values: &Values,
     ) -> Result<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
@@ -105,33 +104,33 @@ impl Drawable for Die {
         ctx.rect(
             top_left.x,
             top_left.y,
-            values.die_dimension,
-            values.die_dimension,
+            VALUES.die_dimension,
+            VALUES.die_dimension,
         );
         ctx.set_font("12px Arial");
         if self.held {
             ctx.set_stroke_style(&JsValue::from_str("red"));
         } else {
-            ctx.set_stroke_style(&JsValue::from_str(values.button_color));
+            ctx.set_stroke_style(&JsValue::from_str(VALUES.button_color));
         }
         // TODO draw the dot pattern
         if let Err(_) = ctx.fill_text(
             &format!("{:?}", self.value),
-            top_left.x + (values.padding / 2.0),
-            top_left.y + (values.die_dimension / 2.0),
+            top_left.x + (VALUES.padding / 2.0),
+            top_left.y + (VALUES.die_dimension / 2.0),
         ) {
             return Err(FiveDiceError::Canvas("text".into()));
         };
         ctx.stroke();
         Ok((
-            top_left.x + values.die_dimension,
-            top_left.y + values.die_dimension,
+            top_left.x + VALUES.die_dimension,
+            top_left.y + VALUES.die_dimension,
         )
             .into())
     }
 
-    fn get_region(&self, top_left: Point, values: &Values) -> Region {
-        (top_left, values.die_dimension, values.die_dimension).into()
+    fn get_region(&self, top_left: Point) -> Region {
+        (top_left, VALUES.die_dimension, VALUES.die_dimension).into()
     }
 }
 

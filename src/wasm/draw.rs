@@ -75,10 +75,9 @@ pub trait Drawable {
         &self,
         top_left: Point,
         ctx: &CanvasRenderingContext2d,
-        values: &Values,
     ) -> Result<Point>;
     /// Get the Region of the bounding box of this drawable
-    fn get_region(&self, top_left: Point, values: &Values) -> Region;
+    fn get_region(&self, top_left: Point) -> Region;
 }
 
 /// Trait representing sets of 0 or more Drawables
@@ -114,10 +113,10 @@ impl MountedWidget {
     }
 
     /// Draw this element and update the cursor
-    fn draw(&self, ctx: &CanvasRenderingContext2d, values: &Values) {
+    fn draw(&self, ctx: &CanvasRenderingContext2d) {
         // Draw all constituent widgets, updating the cursor after each
         self.cursor = self
-            .draw_at(self.get_region(self.cursor, values).origin, ctx, values)
+            .draw_at(self.get_region(self.cursor).origin, ctx)
             .unwrap();
     }
 
@@ -132,14 +131,13 @@ impl Drawable for MountedWidget {
         &self,
         top_left: Point,
         ctx: &CanvasRenderingContext2d,
-        values: &Values,
     ) -> Result<Point> {
         unimplemented!()
         // iterate through the rows of the drawables vec
         // each row should be rendered horizontally
         // then start a new line until out of rows
     }
-    fn get_region(&self, top_left: Point, values: &Values) -> Region {
+    fn get_region(&self, top_left: Point) -> Region {
         unimplemented!()
         // you've got to add up the regions of all the contained drawables
     }
@@ -248,12 +246,16 @@ impl Default for Values {
     }
 }
 
+lazy_static! {
+    /// Instantiate global values
+    pub static ref VALUES: Values = Values::new();
+}
+
 /// Top-level canvas engine object
 pub struct CanvasEngine {
     ctx: CanvasRenderingContext2d,
     cursor: Point,
     elements: Vec<MountedWidget>,
-    pub values: Values,
 }
 
 impl CanvasEngine {
@@ -280,7 +282,7 @@ impl CanvasEngine {
     fn get_cursor_pos(&self) -> Point {
         // last widget's bottom right.  X to 0 (or values.padding), Y to that dot + padding
         let last_drawn_region =
-            self.elements[self.elements.len() - 1].get_region(self.cursor, &self.values);
+            self.elements[self.elements.len() - 1].get_region(self.cursor);
         (0.0, last_drawn_region.origin.y + last_drawn_region.height).into()
     }
 }
@@ -291,7 +293,6 @@ impl Default for CanvasEngine {
             ctx: get_context(),
             cursor: Point::new(),
             elements: Vec::new(),
-            values: Values::new(),
         }
     }
 }

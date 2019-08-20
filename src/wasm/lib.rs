@@ -1,5 +1,8 @@
 // lib.rs - Five Dice WASM module top-level
 
+#[macro_use]
+extern crate lazy_static;
+
 // DOM manipulation macros
 #[macro_use]
 mod dom;
