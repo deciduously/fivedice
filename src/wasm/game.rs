@@ -1,19 +1,19 @@
 // game.rs contains the game logic
 
 use crate::{
-    context::Context,
-    draw::{draw_button, draw_text, Drawable, Point},
+    draw::{Drawable, Point, Region, Values},
     error::*,
     ffi::js_gen_range,
 };
 
 use wasm_bindgen::prelude::*;
+use web_sys::CanvasRenderingContext2d;
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
 
 /// A single player's score object
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Score {
     ones: Option<u8>,
     twos: Option<u8>,
@@ -34,27 +34,6 @@ struct Score {
 impl Score {
     fn new() -> Self {
         Self::default()
-    }
-}
-
-impl Default for Score {
-    fn default() -> Self {
-        Self {
-            ones: None,
-            twos: None,
-            threes: None,
-            fours: None,
-            fives: None,
-            sixes: None,
-            three_kind: false,
-            four_kind: false,
-            two_and_three: false,
-            sm_straight: false,
-            lg_straight: false,
-            five_dice: false,
-            five_dice_again: None,
-            stone_soup: None,
-        }
     }
 }
 
@@ -114,10 +93,12 @@ impl Die {
 }
 
 impl Drawable for Die {
-    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
-        // extract context pointers
-        let ctx = context.ctx;
-        let values = context.values;
+    fn draw_at(
+        &self,
+        top_left: Point,
+        ctx: &CanvasRenderingContext2d,
+        values: &Values,
+    ) -> Result<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
         ctx.begin_path();
@@ -134,13 +115,23 @@ impl Drawable for Die {
             ctx.set_stroke_style(&JsValue::from_str(values.button_color));
         }
         // TODO draw the dot pattern
-        ctx.fill_text(
+        if let Err(_) = ctx.fill_text(
             &format!("{:?}", self.value),
             top_left.x + (values.padding / 2.0),
             top_left.y + (values.die_dimension / 2.0),
-        )?;
+        ) {
+            return Err(FiveDiceError::Canvas("text".into()));
+        };
         ctx.stroke();
-        Ok(())
+        Ok((
+            top_left.x + values.die_dimension,
+            top_left.y + values.die_dimension,
+        )
+            .into())
+    }
+
+    fn get_region(&self, top_left: Point, values: &Values) -> Region {
+        (top_left, values.die_dimension, values.die_dimension).into()
     }
 }
 
@@ -183,11 +174,10 @@ impl Default for Hand {
     }
 }
 
+/*
+TODO THIS WILL BE A WIDGET
 impl Drawable for Hand {
-    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
-        // Access context
-        let ctx = context.ctx;
-        let values = context.values;
+    fn draw_at(&self, top_left: Point, ctx: &Context, values: &Values) -> Result<()> {
         // draw each die
         for (i, item) in self.dice.iter().enumerate().take(HAND_SIZE) {
             // draw each die taking into account offsets for die index and global game offset
@@ -228,7 +218,7 @@ impl Drawable for Hand {
         Ok(())
     }
 }
-
+*/
 /// The Player object
 #[derive(Debug)]
 struct Player {
@@ -257,15 +247,12 @@ enum Message {
 pub struct Game {
     // For now, just a solo game
     player: Player,
-    // The layout constants to use
-    pub context: Context,
 }
 
 impl Game {
     pub fn new() -> Self {
         Self {
             player: Player::new(),
-            context: Context::new(),
         }
     }
 
@@ -281,67 +268,67 @@ impl Game {
     ) -> bool {
         x >= top_left_x && x <= bottom_right_x && y >= top_left_y && y <= bottom_right_y
     }
+    /*
+        /// Handle a click at canvasX, canvasY
+        pub fn handle_click(
+            &mut self,
+            click_x: f64,
+            click_y: f64,
+            ctx: &web_sys::CanvasRenderingContext2d,
+        ) {
+            use Message::*;
+            // Will be moved to Clickable, bot for now...
+            let values = self.context.values;
+            // Check if it hit a die
+            // grab relevant dimensions from the values struct
+            let dice_dim = values.die_dimension;
+            let dice_start_x = values.dice_origin().0;
+            let dice_start_y = values.dice_origin().1;
+            let dice_padding = dice_dim + values.padding;
+            // check if hit given is in each die's boundary
+            for i in 0..HAND_SIZE {
+                let die_start_x = dice_start_x + (dice_padding * i as f64);
+                let die_end_x = dice_start_x + dice_dim + (dice_padding * i as f64);
+                let die_end_y = dice_start_y + dice_dim;
+                if self.detect_region(
+                    click_x,
+                    click_y,
+                    die_start_x,
+                    dice_start_y,
+                    die_end_x,
+                    die_end_y,
+                ) {
+                    self.reducer(HoldDie(i));
+                }
+            }
 
-    /// Handle a click at canvasX, canvasY
-    pub fn handle_click(
-        &mut self,
-        click_x: f64,
-        click_y: f64,
-        ctx: &web_sys::CanvasRenderingContext2d,
-    ) {
-        use Message::*;
-        // Will be moved to Clickable, bot for now...
-        let values = self.context.values;
-        // Check if it hit a die
-        // grab relevant dimensions from the values struct
-        let dice_dim = values.die_dimension;
-        let dice_start_x = values.dice_origin().0;
-        let dice_start_y = values.dice_origin().1;
-        let dice_padding = dice_dim + values.padding;
-        // check if hit given is in each die's boundary
-        for i in 0..HAND_SIZE {
-            let die_start_x = dice_start_x + (dice_padding * i as f64);
-            let die_end_x = dice_start_x + dice_dim + (dice_padding * i as f64);
-            let die_end_y = dice_start_y + dice_dim;
+            // check if we hit the Roll button
+            let (top_left, bottom_right) = values.reroll_button_corners(&ctx);
             if self.detect_region(
                 click_x,
                 click_y,
-                die_start_x,
-                dice_start_y,
-                die_end_x,
-                die_end_y,
+                top_left.0,
+                top_left.1,
+                bottom_right.0,
+                bottom_right.1,
             ) {
-                self.reducer(HoldDie(i));
+                self.reducer(RollDice);
+            }
+
+            // check if we hit the Start Over button
+            let (top_left, bottom_right) = values.start_over_button_corners(&ctx);
+            if self.detect_region(
+                click_x,
+                click_y,
+                top_left.0,
+                top_left.1,
+                bottom_right.0,
+                bottom_right.1,
+            ) {
+                self.reducer(StartOver);
             }
         }
-
-        // check if we hit the Roll button
-        let (top_left, bottom_right) = values.reroll_button_corners(&ctx);
-        if self.detect_region(
-            click_x,
-            click_y,
-            top_left.0,
-            top_left.1,
-            bottom_right.0,
-            bottom_right.1,
-        ) {
-            self.reducer(RollDice);
-        }
-
-        // check if we hit the Start Over button
-        let (top_left, bottom_right) = values.start_over_button_corners(&ctx);
-        if self.detect_region(
-            click_x,
-            click_y,
-            top_left.0,
-            top_left.1,
-            bottom_right.0,
-            bottom_right.1,
-        ) {
-            self.reducer(StartOver);
-        }
-    }
-
+    */
     // Return all the current dice in play
     pub fn get_hand(&self) -> Hand {
         self.player.current_hand
@@ -353,7 +340,7 @@ impl Game {
             self.player.current_hand.dice[die_idx].toggle_held();
         }
     }
-
+    /*
     /// Redraw the screen
     pub fn draw(&self) -> Result<()> {
         let ctx = self.context.ctx;
@@ -367,6 +354,7 @@ impl Game {
         self.draw_at((0.0, 0.0).into(), &self.context)?;
         Ok(())
     }
+    */
 
     /// Handle all incoming messages
     /// TODO send an outgoing result?  Maybe use the memory tape for streaming events back
@@ -387,25 +375,5 @@ impl Game {
     /// Roll all unheld dice
     fn roll_dice(&mut self) {
         self.player.current_hand.roll();
-    }
-}
-
-impl Drawable for Game {
-    fn draw_at(&self, top_left: Point, context: &Context) -> Result<()> {
-        // get child widgets
-        let widgets = self.get_widgets();
-        // draw current widgets
-        for widget in widgets {
-            widget.draw_at(self.get_current_pos(), context, ctx);
-        }
-
-        // draw start over button
-        let start_over_top_left = context.values.start_over_button_corners(context.ctx).0;
-        draw_button("Start Over", start_over_top_left.into(), context)?;
-
-        Ok(())
-    }
-    fn get_widgets(&self) -> Vec<Box<dyn Drawable>> {
-        vec![Box::new(self.get_hand())]
     }
 }
