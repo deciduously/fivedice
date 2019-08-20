@@ -22,7 +22,7 @@ use web_sys::CanvasRenderingContext2d;
 // Each row will have the width of the largest element rendered
 
 /// A single coordinate point on the canvas, top left is 0,0
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -44,7 +44,7 @@ impl From<(f64, f64)> for Point {
 }
 
 /// A rectangular region on the canvas
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Region {
     origin: Point,
     width: f64,
@@ -71,11 +71,7 @@ impl From<(f64, f64, f64, f64)> for Region {
 pub trait Drawable {
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
-    fn draw_at(
-        &self,
-        top_left: Point,
-        ctx: &CanvasRenderingContext2d,
-    ) -> Result<Point>;
+    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point>;
     /// Get the Region of the bounding box of this drawable
     fn get_region(&self, top_left: Point) -> Region;
 }
@@ -90,7 +86,7 @@ pub trait Widget {
     ///     //push some elements
     ///     ret
     /// }
-    fn make_widget(self, top_left: Point) -> MountedWidget;
+    fn mount_widget(&self, top_left: Point) -> MountedWidget;
 }
 
 /// Trait representing Drawables that can be clicked
@@ -119,7 +115,7 @@ impl MountedWidget {
     }
 
     /// Draw this element and update the cursor
-    fn draw(&self, ctx: &CanvasRenderingContext2d) {
+    fn draw(&mut self, ctx: &CanvasRenderingContext2d) {
         // Draw all constituent widgets, updating the cursor after each
         self.cursor = self
             .draw_at(self.get_region(self.cursor).origin, ctx)
@@ -133,21 +129,17 @@ impl MountedWidget {
 
     // TODO maybe these should be one function with a parameter?
     /// Add a new element to the current row
-    pub fn push_current_row(&mut self, d: Box<dyn Drawable>) {
+    pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
         unimplemented!()
     }
     /// Add a new element to a new row
-    pub fn push_new_row(&mut self, d: Box<dyn Drawable>) {
+    pub fn push_new_row(&mut self, d: Box<dyn Widget>) {
         unimplemented!()
     }
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(
-        &self,
-        top_left: Point,
-        ctx: &CanvasRenderingContext2d,
-    ) -> Result<Point> {
+    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
         unimplemented!()
         // iterate through the rows of the drawables vec
         // each row should be rendered horizontally
@@ -262,28 +254,25 @@ impl Default for Values {
     }
 }
 
-/// Instantiate static values object
-pub static VALUES: Values = Values::new();
+lazy_static! {
+    /// Instantiate static values object
+    pub static ref VALUES: Values = Values::new();
+}
 
 /// Top-level canvas engine object
 pub struct CanvasEngine {
     ctx: CanvasRenderingContext2d,
     cursor: Point,
-    elements: Vec<MountedWidget>,
+    element: MountedWidget, // Actually a widget will contain its own mountedwidgets?  maybe just store a toplevel
 }
 
 impl CanvasEngine {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    /// Mount widget
-    pub fn mount(&mut self, w: Box<dyn Widget>) {
-        // you've got to mount all the elements
-        // somehow go through the widgets recursively
-        // so each widget needs to return its children
-        // with absolute positions
-        // Mount the drawable and push it
-        self.elements.push(w.make_widget(self.get_cursor_pos()));
+    pub fn new(w: Box<dyn Widget>) -> Self {
+        Self {
+            ctx: get_context(),
+            cursor: Point::new(),
+            element: w.mount_widget(Point::new()),
+        }
     }
 
     /// Draw elements
@@ -295,21 +284,11 @@ impl CanvasEngine {
     // TODO add padding
     fn get_cursor_pos(&self) -> Point {
         // last widget's bottom right.  X to 0 (or values.padding), Y to that dot + padding
-        let last_drawn_region =
-            self.elements[self.elements.len() - 1].get_region(self.cursor);
+        let last_drawn_region = self.element.get_region(self.cursor);
         (0.0, last_drawn_region.origin.y + last_drawn_region.height).into()
     }
 }
 
-impl Default for CanvasEngine {
-    fn default() -> Self {
-        Self {
-            ctx: get_context(),
-            cursor: Point::new(),
-            elements: Vec::new(),
-        }
-    }
-}
 /*
 //
 // HELPER FUNCTIONS

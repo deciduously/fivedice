@@ -1,7 +1,7 @@
 // game.rs contains the game logic
 
 use crate::{
-    draw::{Drawable, Point, Region, Widget, MountedWidget, VALUES},
+    draw::{Drawable, MountedWidget, Point, Region, Widget, VALUES},
     error::*,
     ffi::js_gen_range,
 };
@@ -50,7 +50,7 @@ pub enum RollResult {
 
 /// A single Die, can be held or not
 #[derive(Debug, Clone, Copy)]
-struct Die {
+pub struct Die {
     value: RollResult,
     held: bool,
 }
@@ -93,11 +93,7 @@ impl Die {
 }
 
 impl Drawable for Die {
-    fn draw_at(
-        &self,
-        top_left: Point,
-        ctx: &CanvasRenderingContext2d,
-    ) -> Result<Point> {
+    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
         ctx.begin_path();
@@ -134,13 +130,17 @@ impl Drawable for Die {
     }
 }
 
-//impl Widget for Die {
-//    fn make_widget(self, top_left: Point) -> MountedWidget {
-//        let ret = MountedWidget::new(top_left);
-//        ret.push_current_row(self);
-//        ret
-//    }
-//}
+// TODO make it easy to impl Widget for items that are Drawable already
+// I smell a macro DSL?  Just one variadic macro should do it at first
+
+impl Widget for Die {
+    fn mount_widget(&self, top_left: Point) -> MountedWidget {
+        let mut ret = MountedWidget::new(top_left);
+        // how do you do this??  Widget doesnt exist yet, you cant use it while its being implemented
+        ret.push_current_row(Box::new(*self));
+        ret
+    }
+}
 
 /// A set of 5 dice for a single play
 #[derive(Debug, Clone, Copy)]
@@ -182,7 +182,7 @@ impl Default for Hand {
 }
 
 impl Widget for Hand {
-    fn make_widget(self, top_left: Point) -> MountedWidget {
+    fn mount_widget(&self, top_left: Point) -> MountedWidget {
         let mut ret = MountedWidget::new(top_left);
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
@@ -401,9 +401,8 @@ impl Game {
 }
 
 impl Widget for Game {
-    fn make_widget(self, top_left: Point) -> MountedWidget {
+    fn mount_widget(&self, top_left: Point) -> MountedWidget {
         let mut ret = MountedWidget::new(top_left);
-        // TODO Hand is a Widget, not a Drawable!
         ret.push_current_row(self.player.get_hand());
         ret
     }

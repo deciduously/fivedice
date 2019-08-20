@@ -1,10 +1,15 @@
 // ffi.rs contains all JS<->Rust interop
 
-use crate::{draw::CanvasEngine, game::Game};
+use crate::{
+    draw::{CanvasEngine, VALUES},
+    game::Game,
+};
 use js_sys::Math::{floor, random};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
-use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, Window};
+use web_sys::{
+    console, CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, MouseEvent, Window,
+};
 
 /// Grab the body
 fn get_body() -> HtmlElement {
@@ -44,7 +49,7 @@ fn get_window() -> Window {
 }
 
 /// requestAnimationFrame
-pub fn request_animation_frame(f: &Closure<dyn FnMut()>) {
+fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     get_window()
         .request_animation_frame(f.as_ref().unchecked_ref())
         .expect("should register `requestAnimationFrame`");
@@ -66,52 +71,36 @@ pub fn start() -> Result<(), JsValue> {
     append_text_element_attrs!(document, body, "h1", "FIVE DICE",);
     append_element_attrs!(document, body, "canvas",);
 
-    // Set up the height
-    let canvas = document
-        .query_selector("canvas")
-        .expect("Could not find <canvas>")
-        .unwrap()
-        .dyn_into::<web_sys::HtmlCanvasElement>()
-        .expect("Could not decipher canvas");
-    let context = canvas
-        .dyn_into::<CanvasRenderingContext2d>()
-        .expect("Could not decipher render context");
+    get_canvas().set_width(VALUES.canvas_size.0);
+    get_canvas().set_height(VALUES.canvas_size.1);
 
     // Instantiate game
-    let game = Rc::new(RefCell::new(Game::new()));
+    let game = Box::new(Game::new());
 
-    /*
     // Instantiate Canvas engine
-    let engine = CanvasEngine::new();
-
-    canvas.set_width(engine.values.canvas_size.0);
-    canvas.set_height(engine.values.canvas_size.1);
-    */
+    let engine = Rc::new(RefCell::new(CanvasEngine::new(game)));
 
     // Add click listener
     // translate from page coords to canvas coords
     // shamelessly lifted from the RustWasm book but translated to Rust
     // https://rustwasm.github.io/book/game-of-life/interactivity.html
     {
-        let game = game.clone();
-        let callback = Closure::wrap(Box::new(move |evt: web_sys::MouseEvent| {
-            let canvas = get_document()
-                .query_selector("canvas")
-                .expect("Could not find game screen")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .expect("Could not find game canvas");
+        //let engine = engine.clone();
+        let callback = Closure::wrap(Box::new(move |_evt: MouseEvent| {
+            let canvas = get_canvas();
             let bounding_rect = canvas.get_bounding_client_rect();
             let scale_x = f64::from(canvas.width()) / bounding_rect.width();
             let scale_y = f64::from(canvas.height()) / bounding_rect.height();
 
-            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
-            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
+            //let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
+            //let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
 
-            game.borrow_mut().handle_click(canvas_x, canvas_y);
+            //TODO implement Clickable
+            //engine.borrow_mut().handle_click(canvas_x, canvas_y);
+            console::log_1(&format!("click at ({}, {})", scale_x, scale_y).into());
         }) as Box<dyn FnMut(_)>);
 
-        canvas
+        get_canvas()
             .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
             .expect("Could not register event listener");
         callback.forget();
@@ -122,7 +111,7 @@ pub fn start() -> Result<(), JsValue> {
     let f = Rc::new(RefCell::new(None));
     let g = f.clone();
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        game.borrow().draw().expect("Could not draw game");
+        engine.borrow().draw();
         request_animation_frame(f.borrow().as_ref().unwrap());
     }) as Box<dyn FnMut()>));
     // Kick off the loop
