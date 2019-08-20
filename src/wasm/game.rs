@@ -1,7 +1,7 @@
 // game.rs contains the game logic
 
 use crate::{
-    draw::{Drawable, Point, Region, VALUES},
+    draw::{Drawable, Point, Region, Widget, MountedWidget, VALUES},
     error::*,
     ffi::js_gen_range,
 };
@@ -134,6 +134,14 @@ impl Drawable for Die {
     }
 }
 
+//impl Widget for Die {
+//    fn make_widget(self, top_left: Point) -> MountedWidget {
+//        let ret = MountedWidget::new(top_left);
+//        ret.push_current_row(self);
+//        ret
+//    }
+//}
+
 /// A set of 5 dice for a single play
 #[derive(Debug, Clone, Copy)]
 pub struct Hand {
@@ -170,6 +178,17 @@ impl Default for Hand {
             ],
             remaining_rolls: 3,
         }
+    }
+}
+
+impl Widget for Hand {
+    fn make_widget(self, top_left: Point) -> MountedWidget {
+        let mut ret = MountedWidget::new(top_left);
+        for die in &self.dice {
+            ret.push_current_row(Box::new(*die));
+        }
+        // TODO add Reroll Button and Text Output
+        ret
     }
 }
 
@@ -231,6 +250,10 @@ impl Player {
             current_hand: Hand::new(),
             score: Score::new(),
         }
+    }
+
+    fn get_hand(&self) -> Box<Hand> {
+        Box::new(self.current_hand)
     }
 }
 
@@ -374,5 +397,14 @@ impl Game {
     /// Roll all unheld dice
     fn roll_dice(&mut self) {
         self.player.current_hand.roll();
+    }
+}
+
+impl Widget for Game {
+    fn make_widget(self, top_left: Point) -> MountedWidget {
+        let mut ret = MountedWidget::new(top_left);
+        // TODO Hand is a Widget, not a Drawable!
+        ret.push_current_row(self.player.get_hand());
+        ret
     }
 }

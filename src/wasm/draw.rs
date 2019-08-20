@@ -84,7 +84,13 @@ pub trait Drawable {
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     /// Make this object into a Widget
-    fn make_widget(self) -> MountedWidget;
+    /// TODO make a DSL for this - right now they're all:
+    /// {
+    ///     let ret p MountedWidget::new(top_left);
+    ///     //push some elements
+    ///     ret
+    /// }
+    fn make_widget(self, top_left: Point) -> MountedWidget;
 }
 
 /// Trait representing Drawables that can be clicked
@@ -97,18 +103,18 @@ pub trait Clickable: Drawable {
 
 /// A container struct for a widget
 #[derive(Default)]
-struct MountedWidget {
+pub struct MountedWidget {
+    children: Vec<Vec<Box<dyn Widget>>>,
     cursor: Point,
     top_left: Point,
-    drawables: Vec<Vec<Box<dyn Drawable>>>,
 }
 
 impl MountedWidget {
-    fn new(top_left: Point) -> Self {
+    pub fn new(top_left: Point) -> Self {
         Self {
+            children: vec![vec![]],
             cursor: top_left,
             top_left,
-            drawables: vec![vec![]],
         }
     }
 
@@ -123,6 +129,16 @@ impl MountedWidget {
     /// Return the next drawing position
     fn get_cursor_pos(&self) -> Point {
         self.cursor
+    }
+
+    // TODO maybe these should be one function with a parameter?
+    /// Add a new element to the current row
+    pub fn push_current_row(&mut self, d: Box<dyn Drawable>) {
+        unimplemented!()
+    }
+    /// Add a new element to a new row
+    pub fn push_new_row(&mut self, d: Box<dyn Drawable>) {
+        unimplemented!()
     }
 }
 
@@ -246,10 +262,8 @@ impl Default for Values {
     }
 }
 
-lazy_static! {
-    /// Instantiate global values
-    pub static ref VALUES: Values = Values::new();
-}
+/// Instantiate static values object
+pub static VALUES: Values = Values::new();
 
 /// Top-level canvas engine object
 pub struct CanvasEngine {
@@ -269,7 +283,7 @@ impl CanvasEngine {
         // so each widget needs to return its children
         // with absolute positions
         // Mount the drawable and push it
-        self.elements.push(w.make_widget());
+        self.elements.push(w.make_widget(self.get_cursor_pos()));
     }
 
     /// Draw elements
