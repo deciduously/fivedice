@@ -7,9 +7,7 @@ use crate::{
 use js_sys::Math::{floor, random};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
-use web_sys::{
-    console, CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, MouseEvent,
-};
+use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, MouseEvent};
 
 /// Grab the body
 fn get_body() -> HtmlElement {
@@ -114,7 +112,7 @@ impl Window for WebSysCanvas {
     }
 }
 
-/// Entrypoint for the module
+/// Entry point for the module
 #[allow(dead_code)]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -170,9 +168,10 @@ pub fn start() -> Result<(), JsValue> {
         let f = Rc::new(RefCell::new(None));
         let g = f.clone();
         *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-            if let Err(e) = engine.borrow().draw() {
-                console::log_2(&"Error: ".into(), &e.into());
-            };
+            engine
+                .borrow()
+                .draw()
+                .expect(&format!("Window error on draw"));
             request_animation_frame(f.borrow().as_ref().unwrap());
         }) as Box<dyn FnMut()>));
         // Kick off the loop

@@ -5,7 +5,6 @@ use crate::{
 };
 use std::{cell::Cell, fmt, rc::Rc, str::FromStr};
 use wasm_bindgen::JsValue;
-use web_sys::CanvasRenderingContext2d;
 
 // You somehow need each thing to know where it is
 // You need a better abstraction over the canvas.
@@ -31,12 +30,6 @@ use web_sys::CanvasRenderingContext2d;
 pub struct Point {
     pub x: f64,
     pub y: f64,
-}
-
-impl Point {
-    fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl fmt::Display for Point {
@@ -401,11 +394,6 @@ impl Default for Values {
 lazy_static! {
     /// Instantiate static values object
     pub static ref VALUES: Values = Values::new();
-}
-
-/// All supported Window types
-enum WindowType {
-    WebSys(CanvasRenderingContext2d),
 }
 
 /// Window error type
