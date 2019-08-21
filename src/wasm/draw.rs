@@ -3,9 +3,9 @@ use crate::{
     error::*,
     ffi::{get_canvas, get_context},
 };
-use std::{cell::Cell, fmt};
+use std::{cell::Cell, fmt, rc::Rc, str::FromStr};
 use wasm_bindgen::JsValue;
-use web_sys::{console, CanvasRenderingContext2d};
+use web_sys::CanvasRenderingContext2d;
 
 // You somehow need each thing to know where it is
 // You need a better abstraction over the canvas.
@@ -64,18 +64,37 @@ impl Into<JsValue> for Point {
 /// A rectangular region on the canvas
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Region {
-    origin: Point,
-    width: f64,
-    height: f64,
+    o: Point,
+    w: f64,
+    h: f64,
+}
+
+impl Region {
+    /// Return this region's bottom right
+    pub fn bottom_right(&self) -> Point {
+        (self.o.x + self.w, self.o.y + self.h).into()
+    }
+    /// Getter for origin
+    pub fn origin(&self) -> Point {
+        self.o
+    }
+    /// Getter for height
+    pub fn height(&self) -> f64 {
+        self.h
+    }
+    /// Getter for width
+    pub fn width(&self) -> f64 {
+        self.w
+    }
 }
 
 /// (top_left, bottom_right)
 impl From<(Point, Point)> for Region {
     fn from(bits: (Point, Point)) -> Self {
         Self {
-            origin: bits.0,
-            width: bits.1.x - bits.0.x,
-            height: bits.1.y - bits.0.y,
+            o: bits.0,
+            w: bits.1.x - bits.0.x,
+            h: bits.1.y - bits.0.y,
         }
     }
 }
@@ -84,9 +103,9 @@ impl From<(Point, Point)> for Region {
 impl From<(Point, f64, f64)> for Region {
     fn from(bits: (Point, f64, f64)) -> Self {
         Self {
-            origin: bits.0,
-            width: bits.1,
-            height: bits.2,
+            o: bits.0,
+            w: bits.1,
+            h: bits.2,
         }
     }
 }
@@ -98,12 +117,51 @@ impl From<(f64, f64, f64, f64)> for Region {
     }
 }
 
+/// Color type, RGB
+#[derive(Debug, Clone, Copy)]
+pub struct Color {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+impl Color {
+    pub fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+}
+
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.r == 255 {
+            write!(f, "red")
+        } else if self.r == 0 && self.g == 0 && self.b == 0 {
+            write!(f, "black")
+        } else {
+            write!(f, "#{}{}{}", self.r, self.g, self.b)
+        }
+    }
+}
+
+impl FromStr for Color {
+    type Err = WindowError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "black" => Ok(Color::new(0, 0, 0)),
+            "red" => Ok(Color::new(255, 0, 0)),
+            _ => unimplemented!(),
+        }
+    }
+}
+
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
-    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point>;
+    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point>;
     /// Get the Region of the bounding box of this drawable
+    // TODO maybe should get ctx as well, for measure_text?  to avoid extra get_context() call
     fn get_region(&self, top_left: Point) -> Region;
 }
 
@@ -148,17 +206,17 @@ impl MountedWidget {
     }
 
     /// Draw this element and update the cursor
-    fn draw(&self, ctx: &CanvasRenderingContext2d) -> Result<Point> {
+    fn draw(&self, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
-        if self.children.len() > 0 {
+        if !self.children.is_empty() {
             for row in &self.children {
-                if row.len() > 0 {
+                if !row.is_empty() {
                     for child in row {
                         // mount the child
                         let mounted_child = child.mount_widget(self.cursor.get());
                         // draw the child
-                        self.cursor.set(mounted_child.draw(ctx)?);
+                        self.cursor.set(mounted_child.draw(Rc::clone(&ctx))?);
                         // advance the cursor horizontally by padding and back to where we started vertically
 
                         self.scroll_horizontal(VALUES.padding)?;
@@ -177,7 +235,6 @@ impl MountedWidget {
         Ok(self.cursor.get())
     }
 
-    // TODO maybe these should be one function with a parameter?
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
         let num_rows = self.children.len();
@@ -191,22 +248,22 @@ impl MountedWidget {
     }
 
     /// Scroll cursor horizontally
-    pub fn scroll_horizontal(&self, offset: f64) -> Result<()> {
+    pub fn scroll_horizontal(&self, offset: f64) -> WindowResult<()> {
         let current = self.cursor.get();
         let new_point = (current.x + offset, current.y).into();
         if !VALUES.fits_canvas(new_point) {
-            return Err(FiveDiceError::OutOfBounds);
+            return Err(WindowError::OutOfBounds);
         }
         self.cursor.set(new_point);
         Ok(())
     }
 
     /// Scroll cursor vertical
-    pub fn scroll_vertical(&self, offset: f64) -> Result<()> {
+    pub fn scroll_vertical(&self, offset: f64) -> WindowResult<()> {
         let current = self.cursor.get();
         let new_point = (current.x, current.y + offset).into();
         if !VALUES.fits_canvas(new_point) {
-            return Err(FiveDiceError::OutOfBounds);
+            return Err(WindowError::OutOfBounds);
         }
         self.cursor.set(new_point);
         Ok(())
@@ -231,13 +288,13 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(&self, _: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
+    fn draw_at(&self, _: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
         // Return new cursor position, leaving at bottom right
 
-        // TODO THIS IS OVERRIDING THE ACTUAL DRAW_AT
         Ok(self.draw(ctx)?)
     }
     fn get_region(&self, _: Point) -> Region {
+        // The cursor will be left at where it was at last draw
         (self.top_left, self.cursor.get()).into()
     }
 }
@@ -246,11 +303,46 @@ impl Drawable for MountedWidget {
 // Reusable Drawables
 //
 
-// TODO Text
+#[derive(Clone)]
+pub struct Text {
+    text: String,
+}
+
+impl Text {
+    pub fn new(s: &str) -> Self {
+        Self { text: s.into() }
+    }
+}
+
+impl Drawable for Text {
+    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
+        ctx.begin_path();
+        ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
+        ctx.draw_path();
+        Ok(self.get_region(top_left).bottom_right())
+    }
+
+    fn get_region(&self, top_left: Point) -> Region {
+        let text_size = get_context()
+            .measure_text(&self.text)
+            .expect("Could not measure text");
+        (top_left, text_size.width(), f64::from(VALUES.font_size)).into()
+    }
+}
+
+impl Widget for Text {
+    fn mount_widget(&self, top_left: Point) -> MountedWidget {
+        let mut ret = MountedWidget::new(top_left);
+        ret.set_drawable(Box::new(Text::new(&self.text)));
+        ret
+    }
+}
 
 // TODO Button
 
 // Values configuration
+// TODO this is very tightly coupled
+// Last thing before you can split out
 
 /// Layout values
 #[derive(Debug, Clone, Copy)]
@@ -266,9 +358,10 @@ pub struct Values {
     /// What color to use for button border
     pub button_color: &'static str,
     /// What font to use for buttons
-    pub button_font: &'static str,
+    pub font: &'static str,
     /// What size font on buttons
     pub button_font_size: u8,
+    pub font_size: u8,
 }
 
 impl Values {
@@ -286,7 +379,7 @@ impl Values {
 
     /// Put the font size and the font together
     pub fn get_font_string(&self) -> String {
-        format!("{}px {}", self.button_font_size, self.button_font)
+        format!("{}px {}", self.font_size, self.font)
     }
 }
 
@@ -298,8 +391,9 @@ impl Default for Values {
             padding: 10.0,
             reroll_button_text: "Roll!",
             button_color: "black",
-            button_font: "Arial",
+            font: "Arial",
             button_font_size: 16,
+            font_size: 12,
         }
     }
 }
@@ -309,26 +403,62 @@ lazy_static! {
     pub static ref VALUES: Values = Values::new();
 }
 
-// TODO Parameterize canvas drawing
-// After you get a successful paint!
-// Instead of passing the CanvasRenderingContext2d, make dedicated draw_line(), draw_circle(), draw_text(), and that will handle the details
-
-/// Top-level canvas engine object
-pub struct CanvasEngine {
-    ctx: CanvasRenderingContext2d,
-    element: Option<MountedWidget>,
+/// All supported Window types
+enum WindowType {
+    WebSys(CanvasRenderingContext2d),
 }
 
-impl CanvasEngine {
-    pub fn new(w: Box<dyn Widget>) -> Self {
-        let mounted_widget = w.mount_widget(Point::default());
-        console::log_2(
-            &"Mounting to canvas: ".into(),
-            &format!("{}", mounted_widget).into(),
-        );
+/// Window error type
+#[derive(Debug)]
+pub enum WindowError {
+    OutOfBounds,
+    Text,
+}
+
+impl fmt::Display for WindowError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Text => write!(f, "Could not add text to the window"),
+            Self::OutOfBounds => write!(f, "Attempted to scroll cursor out of bounds!"),
+        }
+    }
+}
+
+impl std::error::Error for WindowError {}
+
+pub type WindowResult<T> = std::result::Result<T, WindowError>;
+
+/// Trait representing a canvas to be drawn to.  For now, only supports CanvasRenderingContext2d
+pub trait Window {
+    /// Blank the window
+    fn blank(&self);
+    /// Draw a rectangle
+    fn rect(&self, region: Region);
+    /// Begin/rest a path - should we let the engine handle this??
+    /// its more efficient to batch calls, so for now I'm letting the user decide when to do that
+    // TODO Eventually a DSL will let batches happen
+    fn begin_path(&self);
+    /// Draw the current path
+    fn draw_path(&self);
+    /// Set pen color
+    fn set_color(&self, color_str: Color);
+    /// Draw some text
+    fn text(&self, text: &str, font: &str, origin: Point) -> WindowResult<()>;
+}
+
+/// Top-level canvas engine object
+/// // TODO maybe a good spot to store values?
+pub struct WindowEngine {
+    window: Rc<Box<dyn Window>>,
+    element: MountedWidget,
+}
+
+impl WindowEngine {
+    pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
+        let mounted_widget = e.mount_widget(Point::default());
         Self {
-            ctx: get_context(),
-            element: Some(mounted_widget),
+            window: Rc::new(w),
+            element: mounted_widget,
         }
     }
 
@@ -338,16 +468,9 @@ impl CanvasEngine {
         get_canvas().set_width(VALUES.canvas_size.0);
         get_canvas().set_height(VALUES.canvas_size.1);
         // clear canvas
-        self.ctx.clear_rect(
-            0.0,
-            0.0,
-            VALUES.canvas_size.0.into(),
-            VALUES.canvas_size.1.into(),
-        );
-        // Draw element, if any
-        if let Some(w) = &self.element {
-            w.draw(&self.ctx)?;
-        }
+        self.window.blank();
+        // Draw element
+        self.element.draw(Rc::clone(&self.window))?;
         Ok(())
     }
 }
@@ -390,20 +513,6 @@ pub fn draw_button(
     };
 
     // Draw and return
-    ctx.stroke();
-    Ok(())
-}
-
-/// Draw some text -= also a struct, impl Drawable!
-pub fn draw_text(
-    text: &str,
-    top_left: Point,
-    ctx: &web_sys::CanvasRenderingContext2d,
-) -> Result<()> {
-    ctx.begin_path();
-    if let Err(_) = ctx.fill_text(text, top_left.x, top_left.y) {
-        return Err(FiveDiceError::Canvas("button".into()));
-    };
     ctx.stroke();
     Ok(())
 }

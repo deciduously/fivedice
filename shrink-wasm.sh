@@ -74,7 +74,11 @@ function choose_smaller {
 
 echo_size $WASM
 echo "Shrinking, optimizing for ${1}"
-choose_smaller $1
+if [ "$1" = "size" ]; then
+    choose_smaller $1
+else
+    shrink "-f=$1" -l=aggressive $WASM
+fi
 echo_size $WASM
 
 exit

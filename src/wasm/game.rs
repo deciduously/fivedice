@@ -1,13 +1,13 @@
 // game.rs contains the game logic
 
 use crate::{
-    draw::{Drawable, MountedWidget, Point, Region, Widget, VALUES},
-    error::*,
+    draw::{
+        Color, Drawable, MountedWidget, Point, Region, Text, Widget, Window, WindowResult, VALUES,
+    },
     ffi::js_gen_range,
 };
 
-use wasm_bindgen::prelude::*;
-use web_sys::CanvasRenderingContext2d;
+use std::{rc::Rc, str::FromStr};
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
@@ -93,31 +93,27 @@ impl Die {
 }
 
 impl Drawable for Die {
-    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
+    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
         ctx.begin_path();
-        ctx.rect(
-            top_left.x,
-            top_left.y,
-            VALUES.die_dimension,
-            VALUES.die_dimension,
-        );
-        ctx.set_font("12px Arial");
+        ctx.rect((top_left, VALUES.die_dimension, VALUES.die_dimension).into());
         if self.held {
-            ctx.set_stroke_style(&JsValue::from_str("red"));
+            ctx.set_color(Color::from_str("red")?);
         } else {
-            ctx.set_stroke_style(&JsValue::from_str(VALUES.button_color));
+            ctx.set_color(Color::from_str(VALUES.button_color)?);
         }
         // TODO draw the dot pattern
-        if let Err(_) = ctx.fill_text(
+        ctx.text(
             &format!("{:?}", self.value),
-            top_left.x + (VALUES.padding / 2.0),
-            top_left.y + (VALUES.die_dimension / 2.0),
-        ) {
-            return Err(FiveDiceError::Canvas("text".into()));
-        };
-        ctx.stroke();
+            &VALUES.get_font_string(),
+            (
+                top_left.x + (VALUES.padding / 2.0),
+                top_left.y + (VALUES.die_dimension / 2.0),
+            )
+                .into(),
+        )?;
+        ctx.draw_path();
         Ok((
             top_left.x + VALUES.die_dimension,
             top_left.y + VALUES.die_dimension,
@@ -186,7 +182,11 @@ impl Widget for Hand {
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        // TODO add Reroll Button and Text Output
+        // TODO add Reroll Button
+        ret.push_new_row(Box::new(Text::new(&format!(
+            "Remaining rolls: {}",
+            self.remaining_rolls
+        ))));
         ret
     }
 }

@@ -1,14 +1,14 @@
 // ffi.rs contains all JS<->Rust interop
 
 use crate::{
-    draw::{CanvasEngine, Point, VALUES},
+    draw::{Color, Point, Region, Window, WindowEngine, WindowError, WindowResult, VALUES},
     game::Game,
 };
 use js_sys::Math::{floor, random};
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{
-    console, CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, MouseEvent, Window,
+    console, CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement, MouseEvent,
 };
 
 /// Grab the body
@@ -44,7 +44,7 @@ fn get_document() -> Document {
 }
 
 /// Grab the window
-fn get_window() -> Window {
+fn get_window() -> web_sys::Window {
     web_sys::window().expect("No window found")
 }
 
@@ -58,6 +58,60 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 /// use js Math.random() to get an integer in range [min, max)
 pub fn js_gen_range(min: i64, max: i64) -> i64 {
     (floor(random() * (max as f64 - min as f64)) + min as f64) as i64
+}
+
+/// Canvas implementation for WebSys
+pub struct WebSysCanvas {
+    ctx: Rc<CanvasRenderingContext2d>,
+}
+
+impl WebSysCanvas {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for WebSysCanvas {
+    fn default() -> Self {
+        Self {
+            ctx: Rc::new(get_context()),
+        }
+    }
+}
+
+impl Window for WebSysCanvas {
+    fn blank(&self) {
+        self.ctx.clear_rect(
+            0.0,
+            0.0,
+            VALUES.canvas_size.0.into(),
+            VALUES.canvas_size.1.into(),
+        )
+    }
+    fn rect(&self, region: Region) {
+        self.ctx.rect(
+            region.origin().x,
+            region.origin().y,
+            region.width(),
+            region.height(),
+        );
+    }
+    fn begin_path(&self) {
+        self.ctx.begin_path();
+    }
+    fn draw_path(&self) {
+        self.ctx.stroke();
+    }
+    fn set_color(&self, color: Color) {
+        self.ctx.set_stroke_style(&format!("{}", color).into());
+    }
+    fn text(&self, text: &str, font: &str, origin: Point) -> WindowResult<()> {
+        self.ctx.set_font(font);
+        if self.ctx.fill_text(text, origin.x, origin.y).is_err() {
+            return Err(WindowError::Text);
+        }
+        Ok(())
+    }
 }
 
 /// Entrypoint for the module
@@ -77,11 +131,14 @@ pub fn start() -> Result<(), JsValue> {
         ("height", &format!("{}", VALUES.canvas_size.1))
     );
 
+    // Instantiate game engine
+    let renderable_context = Box::new(WebSysCanvas::new());
+
     // Instantiate game
     let game = Box::new(Game::new());
 
     // Instantiate Canvas engine
-    let engine = Rc::new(RefCell::new(CanvasEngine::new(game)));
+    let engine = Rc::new(RefCell::new(WindowEngine::new(renderable_context, game)));
 
     // Add click listener
     // translate from page coords to canvas coords
@@ -89,19 +146,18 @@ pub fn start() -> Result<(), JsValue> {
     // https://rustwasm.github.io/book/game-of-life/interactivity.html
     {
         //let engine = engine.clone();
-        let callback = Closure::wrap(Box::new(move |_evt: MouseEvent| {
+        let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
             let canvas = get_canvas();
             let bounding_rect = canvas.get_bounding_client_rect();
             let scale_x = f64::from(canvas.width()) / bounding_rect.width();
             let scale_y = f64::from(canvas.height()) / bounding_rect.height();
 
-            //let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
-            //let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
+            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
+            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
 
             //TODO implement Clickable
             //engine.borrow_mut().handle_click(canvas_x, canvas_y);
-            let scale_p: Point = (scale_x, scale_y).into();
-            console::log_1(&format!("click at {}", scale_p).into());
+            let _click: Point = (canvas_x, canvas_y).into();
         }) as Box<dyn FnMut(_)>);
 
         get_canvas()
