@@ -1,6 +1,11 @@
 // draw.rs contains the Drawable/Clickable traits and canvas rendering engine, as well as generic widgets like Button
-use crate::{error::*, ffi::get_context};
-use web_sys::CanvasRenderingContext2d;
+use crate::{
+    error::*,
+    ffi::{get_canvas, get_context},
+};
+use std::{cell::Cell, fmt};
+use wasm_bindgen::JsValue;
+use web_sys::{console, CanvasRenderingContext2d};
 
 // You somehow need each thing to know where it is
 // You need a better abstraction over the canvas.
@@ -11,8 +16,8 @@ use web_sys::CanvasRenderingContext2d;
 
 // TODO look into AsRef()/AsMut()?
 
-// TODO
-// There are two distinct thinggs - drawables and Widgets.  I'm calling it a Mounted right now, its really a Widget
+// TODO docs
+// There are two distinct things: Drawables and Widgets.  I'm calling it a Mounted right now, its really a Widget
 // Widgets contain drawables
 // To implement Widget, you need to define how many rows of elements you want, and how many elements are in each row
 // what's a good way to do this?
@@ -34,12 +39,25 @@ impl Point {
     }
 }
 
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+/// (x, y), from (0, 0) at top left
 impl From<(f64, f64)> for Point {
     fn from(other: (f64, f64)) -> Self {
         Self {
             x: other.0,
             y: other.1,
         }
+    }
+}
+
+impl Into<JsValue> for Point {
+    fn into(self) -> JsValue {
+        format!("{}", self).into()
     }
 }
 
@@ -51,6 +69,18 @@ pub struct Region {
     height: f64,
 }
 
+/// (top_left, bottom_right)
+impl From<(Point, Point)> for Region {
+    fn from(bits: (Point, Point)) -> Self {
+        Self {
+            origin: bits.0,
+            width: bits.1.x - bits.0.x,
+            height: bits.1.y - bits.0.y,
+        }
+    }
+}
+
+/// (origin, width, height)
 impl From<(Point, f64, f64)> for Region {
     fn from(bits: (Point, f64, f64)) -> Self {
         Self {
@@ -61,6 +91,7 @@ impl From<(Point, f64, f64)> for Region {
     }
 }
 
+/// (origin_x, origin_y, width, height)
 impl From<(f64, f64, f64, f64)> for Region {
     fn from(bits: (f64, f64, f64, f64)) -> Self {
         ((bits.0, bits.1).into(), bits.2, bits.3).into()
@@ -80,12 +111,12 @@ pub trait Drawable {
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     /// Make this object into a Widget
-    /// TODO make a DSL for this - right now they're all:
-    /// {
-    ///     let ret p MountedWidget::new(top_left);
-    ///     //push some elements
-    ///     ret
-    /// }
+    // TODO make a DSL for this - right now they're all:
+    // {
+    //     let ret p MountedWidget::new(top_left);
+    //     //push some elements
+    //     ret
+    // }
     fn mount_widget(&self, top_left: Point) -> MountedWidget;
 }
 
@@ -101,7 +132,7 @@ pub trait Clickable: Drawable {
 #[derive(Default)]
 pub struct MountedWidget {
     children: Vec<Vec<Box<dyn Widget>>>,
-    cursor: Point,
+    cursor: Cell<Point>,
     top_left: Point,
 }
 
@@ -109,45 +140,72 @@ impl MountedWidget {
     pub fn new(top_left: Point) -> Self {
         Self {
             children: vec![vec![]],
-            cursor: top_left,
+            cursor: Cell::new(top_left),
             top_left,
         }
     }
 
     /// Draw this element and update the cursor
-    fn draw(&mut self, ctx: &CanvasRenderingContext2d) {
+    fn draw(&self, ctx: &CanvasRenderingContext2d) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
-        self.cursor = self
-            .draw_at(self.get_region(self.cursor).origin, ctx)
-            .unwrap();
-    }
+        console::log_2(&"cursor: ".into(), &self.cursor.get().into());
+        for row in &self.children {
+            for child in row {
+                // mount the child
+                let mounted_child = child.mount_widget(self.cursor.get());
+                // draw the child
+                self.cursor
+                    .set(mounted_child.draw_at(self.cursor.get(), ctx)?);
+                // advance the cursor horizontally by padding and back to where we started vertically
 
-    /// Return the next drawing position
-    fn get_cursor_pos(&self) -> Point {
-        self.cursor
+                self.scroll_horizontal(VALUES.padding);
+                console::log_2(&"cursor: ".into(), &self.cursor.get().into());
+                self.scroll_vertical(self.cursor.get().y - self.top_left.y);
+                console::log_2(&"cursor: ".into(), &self.cursor.get().into());
+            }
+            // advance the cursor back to the beginning of the next line down
+            self.scroll_vertical(VALUES.padding);
+            self.scroll_horizontal(self.cursor.get().x - self.top_left.x);
+        }
+        console::log_2(&"cursor: ".into(), &self.cursor.get().into());
+        Ok(self.cursor.get())
     }
 
     // TODO maybe these should be one function with a parameter?
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
-        unimplemented!()
+        let num_rows = self.children.len();
+        let idx = if num_rows > 0 { num_rows - 1 } else { 0 };
+        self.children[idx].push(d);
     }
+
     /// Add a new element to a new row
     pub fn push_new_row(&mut self, d: Box<dyn Widget>) {
-        unimplemented!()
+        self.children.push(vec![d]);
+    }
+
+    ///Scroll cursor horizontally
+    pub fn scroll_horizontal(&self, offset: f64) {
+        let current = self.cursor.get();
+        self.cursor.set((current.x + offset, current.y).into());
+    }
+
+    // Scroll cursor vertical
+    pub fn scroll_vertical(&self, offset: f64) {
+        let current = self.cursor.get();
+        self.cursor.set((current.x, current.y + offset).into());
     }
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(&self, top_left: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
-        unimplemented!()
-        // iterate through the rows of the drawables vec
-        // each row should be rendered horizontally
-        // then start a new line until out of rows
+    fn draw_at(&self, _: Point, ctx: &CanvasRenderingContext2d) -> Result<Point> {
+        // Return new cursor position, leaving at bottom right
+
+        // TODO THIS IS OVERRIDING THE ACTUAL DRAW_AT
+        Ok(self.draw(ctx)?)
     }
-    fn get_region(&self, top_left: Point) -> Region {
-        unimplemented!()
-        // you've got to add up the regions of all the contained drawables
+    fn get_region(&self, _: Point) -> Region {
+        (self.top_left, self.cursor.get()).into()
     }
 }
 
@@ -185,65 +243,16 @@ impl Values {
         Self::default()
     }
 
-    /// Get button height
-    pub fn get_button_height(&self) -> f64 {
-        f64::from(self.button_font_size) + (self.padding + 2.0)
-    }
-
     /// Put the font size and the font together
     pub fn get_font_string(&self) -> String {
         format!("{}px {}", self.button_font_size, self.button_font)
     }
-
-    /// Get top left corner of hand display
-    pub fn dice_origin(&self) -> (f64, f64) {
-        (self.padding, 0.0)
-    }
-    /*
-    /// Get the top left corner of the reroll dice button (topleft, bottomright), both as (x, y)
-    /// // TODO remove - this will end up with Clickable on this specific Button object
-    pub fn reroll_button_corners(
-        &self,
-        context: &CanvasRenderingContext2d,
-    ) -> ((f64, f64), (f64, f64)) {
-        let text_width = context
-            .measure_text(self.reroll_button_text)
-            .unwrap()
-            .width();
-        let button_width = text_width + self.padding;
-        let button_height = self.get_button_height();
-        let top_left = (
-            self.padding,
-            self.dice_origin().1 + self.die_dimension + (self.padding * 2.0),
-        );
-        let bottom_right = (top_left.0 + button_width, top_left.1 + button_height);
-        (top_left, bottom_right)
-    }
-
-    /// Get the corners of the start over button
-    /// TODO make it easier to get the corners from just one corner and the text
-    pub fn start_over_button_corners(
-        &self,
-        context: &CanvasRenderingContext2d,
-    ) -> ((f64, f64), (f64, f64)) {
-        let text_width = context.measure_text("Start Over").unwrap().width();
-        let top_left = (
-            self.padding,
-            (self.reroll_button_corners(context).1).1 + self.padding,
-        );
-        let bottom_right = (
-            top_left.0 + text_width + self.padding,
-            top_left.1 + self.get_button_height(),
-        );
-        (top_left, bottom_right)
-    }
-    */
 }
 
 impl Default for Values {
     fn default() -> Self {
         Self {
-            canvas_size: (640, 480),
+            canvas_size: (800, 600),
             die_dimension: 50.0,
             padding: 10.0,
             reroll_button_text: "Roll!",
@@ -262,30 +271,27 @@ lazy_static! {
 /// Top-level canvas engine object
 pub struct CanvasEngine {
     ctx: CanvasRenderingContext2d,
-    cursor: Point,
-    element: MountedWidget, // Actually a widget will contain its own mountedwidgets?  maybe just store a toplevel
+    element: Option<MountedWidget>,
 }
 
 impl CanvasEngine {
     pub fn new(w: Box<dyn Widget>) -> Self {
         Self {
             ctx: get_context(),
-            cursor: Point::new(),
-            element: w.mount_widget(Point::new()),
+            element: Some(w.mount_widget(Point::new())),
         }
     }
 
     /// Draw elements
-    pub fn draw(&self) {
-        unimplemented!()
-    }
-
-    /// Get the next cursor position
-    // TODO add padding
-    fn get_cursor_pos(&self) -> Point {
-        // last widget's bottom right.  X to 0 (or values.padding), Y to that dot + padding
-        let last_drawn_region = self.element.get_region(self.cursor);
-        (0.0, last_drawn_region.origin.y + last_drawn_region.height).into()
+    pub fn draw(&self) -> Result<()> {
+        // set canvas dimensions
+        get_canvas().set_width(VALUES.canvas_size.0);
+        get_canvas().set_height(VALUES.canvas_size.1);
+        // Draw element, if any
+        if let Some(w) = &self.element {
+            w.draw(&self.ctx)?;
+        }
+        Ok(())
     }
 }
 

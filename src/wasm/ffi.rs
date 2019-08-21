@@ -1,7 +1,7 @@
 // ffi.rs contains all JS<->Rust interop
 
 use crate::{
-    draw::{CanvasEngine, VALUES},
+    draw::{CanvasEngine, Point, VALUES},
     game::Game,
 };
 use js_sys::Math::{floor, random};
@@ -17,7 +17,7 @@ fn get_body() -> HtmlElement {
 }
 
 /// Grab the canvas
-fn get_canvas() -> HtmlCanvasElement {
+pub fn get_canvas() -> HtmlCanvasElement {
     get_body()
         .query_selector("canvas")
         .expect("Could not find <canvas>")
@@ -69,10 +69,13 @@ pub fn start() -> Result<(), JsValue> {
     let body = get_body();
     // Mount the title and canvas elements
     append_text_element_attrs!(document, body, "h1", "FIVE DICE",);
-    append_element_attrs!(document, body, "canvas",);
-
-    get_canvas().set_width(VALUES.canvas_size.0);
-    get_canvas().set_height(VALUES.canvas_size.1);
+    append_element_attrs!(
+        document,
+        body,
+        "canvas",
+        ("width", &format!("{}", VALUES.canvas_size.0)),
+        ("height", &format!("{}", VALUES.canvas_size.1))
+    );
 
     // Instantiate game
     let game = Box::new(Game::new());
@@ -97,25 +100,28 @@ pub fn start() -> Result<(), JsValue> {
 
             //TODO implement Clickable
             //engine.borrow_mut().handle_click(canvas_x, canvas_y);
-            console::log_1(&format!("click at ({}, {})", scale_x, scale_y).into());
+            let scale_p: Point = (scale_x, scale_y).into();
+            console::log_1(&format!("click at {}", scale_p).into());
         }) as Box<dyn FnMut(_)>);
 
         get_canvas()
             .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
             .expect("Could not register event listener");
         callback.forget();
+
+        // Run the game loop
+        // All iterations inside the loop can use the Rc.  Starts out empty
+        let f = Rc::new(RefCell::new(None));
+        let g = f.clone();
+        *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+            if let Err(e) = engine.borrow().draw() {
+                console::log_2(&"Error: ".into(), &e.into());
+            };
+            request_animation_frame(f.borrow().as_ref().unwrap());
+        }) as Box<dyn FnMut()>));
+        // Kick off the loop
+        request_animation_frame(g.borrow().as_ref().unwrap());
+
+        Ok(())
     }
-
-    // Run the game loop
-    // All iterations inside the loop can use the Rc.  Starts out empty
-    let f = Rc::new(RefCell::new(None));
-    let g = f.clone();
-    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        engine.borrow().draw();
-        request_animation_frame(f.borrow().as_ref().unwrap());
-    }) as Box<dyn FnMut()>));
-    // Kick off the loop
-    request_animation_frame(g.borrow().as_ref().unwrap());
-
-    Ok(())
 }
