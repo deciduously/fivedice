@@ -132,6 +132,7 @@ pub trait Clickable: Drawable {
 #[derive(Default)]
 pub struct MountedWidget {
     children: Vec<Vec<Box<dyn Widget>>>,
+    drawable: Option<Box<dyn Drawable>>,
     cursor: Cell<Point>,
     top_left: Point,
 }
@@ -140,6 +141,7 @@ impl MountedWidget {
     pub fn new(top_left: Point) -> Self {
         Self {
             children: vec![vec![]],
+            drawable: None,
             cursor: Cell::new(top_left),
             top_left,
         }
@@ -154,18 +156,21 @@ impl MountedWidget {
                 // mount the child
                 let mounted_child = child.mount_widget(self.cursor.get());
                 // draw the child
-                self.cursor
-                    .set(mounted_child.draw_at(self.cursor.get(), ctx)?);
+                self.cursor.set(mounted_child.draw(ctx)?);
                 // advance the cursor horizontally by padding and back to where we started vertically
 
-                self.scroll_horizontal(VALUES.padding);
+                self.scroll_horizontal(VALUES.padding)?;
                 console::log_2(&"cursor: ".into(), &self.cursor.get().into());
-                self.scroll_vertical(self.cursor.get().y - self.top_left.y);
+                self.scroll_vertical(self.cursor.get().y - self.top_left.y)?;
                 console::log_2(&"cursor: ".into(), &self.cursor.get().into());
             }
             // advance the cursor back to the beginning of the next line down
-            self.scroll_vertical(VALUES.padding);
-            self.scroll_horizontal(self.cursor.get().x - self.top_left.x);
+            self.scroll_vertical(VALUES.padding)?;
+            self.scroll_horizontal(self.cursor.get().x - self.top_left.x)?;
+        }
+        // finally, draw self
+        if let Some(d) = &self.drawable {
+            self.cursor.set(d.draw_at(self.cursor.get(), ctx)?);
         }
         console::log_2(&"cursor: ".into(), &self.cursor.get().into());
         Ok(self.cursor.get())
@@ -184,16 +189,31 @@ impl MountedWidget {
         self.children.push(vec![d]);
     }
 
-    ///Scroll cursor horizontally
-    pub fn scroll_horizontal(&self, offset: f64) {
+    /// Scroll cursor horizontally
+    pub fn scroll_horizontal(&self, offset: f64) -> Result<()> {
         let current = self.cursor.get();
-        self.cursor.set((current.x + offset, current.y).into());
+        let new_point = (current.x + offset, current.y).into();
+        if !VALUES.fits_canvas(new_point) {
+            return Err(FiveDiceError::OutOfBounds);
+        }
+        self.cursor.set(new_point);
+        Ok(())
     }
 
-    // Scroll cursor vertical
-    pub fn scroll_vertical(&self, offset: f64) {
+    /// Scroll cursor vertical
+    pub fn scroll_vertical(&self, offset: f64) -> Result<()> {
         let current = self.cursor.get();
-        self.cursor.set((current.x, current.y + offset).into());
+        let new_point = (current.x, current.y + offset).into();
+        if !VALUES.fits_canvas(new_point) {
+            return Err(FiveDiceError::OutOfBounds);
+        }
+        self.cursor.set(new_point);
+        Ok(())
+    }
+
+    /// Set drawable for this widget - overrides any currently set
+    pub fn set_drawable(&mut self, d: Box<dyn Drawable>) {
+        self.drawable = Some(d);
     }
 }
 
@@ -241,6 +261,14 @@ pub struct Values {
 impl Values {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Return whether the given point fits on this canvas size
+    fn fits_canvas(&self, p: Point) -> bool {
+        (p.x as u32) < self.canvas_size.0
+            && p.x > 0.0
+            && (p.y as u32) < self.canvas_size.1
+            && p.y > 0.0
     }
 
     /// Put the font size and the font together

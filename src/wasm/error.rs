@@ -8,6 +8,7 @@ use wasm_bindgen::JsValue;
 pub enum FiveDiceError {
     Canvas(String),
     Interop(String),
+    OutOfBounds,
 }
 
 impl fmt::Display for FiveDiceError {
@@ -15,6 +16,7 @@ impl fmt::Display for FiveDiceError {
         match self {
             Self::Canvas(typename) => write!(f, "Could not write {} to the canvas!", typename),
             Self::Interop(detail) => write!(f, "Interop error: {}", detail),
+            Self::OutOfBounds => write!(f, "Attempted to scroll cursor out of bounds!")
         }
     }
 }

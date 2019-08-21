@@ -137,7 +137,7 @@ impl Widget for Die {
     fn mount_widget(&self, top_left: Point) -> MountedWidget {
         let mut ret = MountedWidget::new(top_left);
         // how do you do this??  Widget doesnt exist yet, you cant use it while its being implemented
-        ret.push_current_row(Box::new(*self));
+        ret.set_drawable(Box::new(*self));
         ret
     }
 }
