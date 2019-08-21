@@ -66,9 +66,9 @@ function choose_smaller {
     eval shrink "-f=$1" -l=aggressive $AGGRO_TARGET
     AGGRO_SIZE="$(eval extract_size $AGGRO_TARGET)"
     if [ $NORMAL_SIZE -lt $AGGRO_SIZE ]; then
-        echo "Normal settings smaller"; mv $NORMAL_TARGET $WASM; rm $AGGRO_TARGET;
+        echo "Normal settings smaller, saving..."; mv $NORMAL_TARGET $WASM; rm $AGGRO_TARGET;
     else
-        echo "Aggressive settings smaller"; mv $AGGRO_TARGET $WASM; rm $NORMAL_TARGET;
+        echo "Aggressive settings smaller, saving..."; mv $AGGRO_TARGET $WASM; rm $NORMAL_TARGET;
     fi
 }
 

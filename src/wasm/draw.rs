@@ -150,29 +150,30 @@ impl MountedWidget {
     /// Draw this element and update the cursor
     fn draw(&self, ctx: &CanvasRenderingContext2d) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
-        console::log_2(&"cursor: ".into(), &self.cursor.get().into());
-        for row in &self.children {
-            for child in row {
-                // mount the child
-                let mounted_child = child.mount_widget(self.cursor.get());
-                // draw the child
-                self.cursor.set(mounted_child.draw(ctx)?);
-                // advance the cursor horizontally by padding and back to where we started vertically
+        // Draw any child widgets
+        if self.children.len() > 0 {
+            for row in &self.children {
+                if row.len() > 0 {
+                    for child in row {
+                        // mount the child
+                        let mounted_child = child.mount_widget(self.cursor.get());
+                        // draw the child
+                        self.cursor.set(mounted_child.draw(ctx)?);
+                        // advance the cursor horizontally by padding and back to where we started vertically
 
-                self.scroll_horizontal(VALUES.padding)?;
-                console::log_2(&"cursor: ".into(), &self.cursor.get().into());
-                self.scroll_vertical(self.cursor.get().y - self.top_left.y)?;
-                console::log_2(&"cursor: ".into(), &self.cursor.get().into());
+                        self.scroll_horizontal(VALUES.padding)?;
+                        self.scroll_vertical(-(self.cursor.get().y - self.top_left.y))?;
+                    }
+                    // advance the cursor back to the beginning of the next line down
+                    self.scroll_vertical(VALUES.padding)?;
+                    self.scroll_horizontal(-(self.cursor.get().x - VALUES.padding))?;
+                }
             }
-            // advance the cursor back to the beginning of the next line down
-            self.scroll_vertical(VALUES.padding)?;
-            self.scroll_horizontal(self.cursor.get().x - self.top_left.x)?;
         }
-        // finally, draw self
+        // draw self, if present
         if let Some(d) = &self.drawable {
             self.cursor.set(d.draw_at(self.cursor.get(), ctx)?);
         }
-        console::log_2(&"cursor: ".into(), &self.cursor.get().into());
         Ok(self.cursor.get())
     }
 
@@ -214,6 +215,18 @@ impl MountedWidget {
     /// Set drawable for this widget - overrides any currently set
     pub fn set_drawable(&mut self, d: Box<dyn Drawable>) {
         self.drawable = Some(d);
+    }
+}
+
+impl fmt::Display for MountedWidget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Mounted Widget at {} with {} rows of children,{} drawable",
+            self.top_left,
+            self.children.len(),
+            if self.drawable.is_some() { "" } else { " not" }
+        )
     }
 }
 
@@ -266,9 +279,9 @@ impl Values {
     /// Return whether the given point fits on this canvas size
     fn fits_canvas(&self, p: Point) -> bool {
         (p.x as u32) < self.canvas_size.0
-            && p.x > 0.0
+            && p.x >= 0.0
             && (p.y as u32) < self.canvas_size.1
-            && p.y > 0.0
+            && p.y >= 0.0
     }
 
     /// Put the font size and the font together
@@ -296,6 +309,10 @@ lazy_static! {
     pub static ref VALUES: Values = Values::new();
 }
 
+// TODO Parameterize canvas drawing
+// After you get a successful paint!
+// Instead of passing the CanvasRenderingContext2d, make dedicated draw_line(), draw_circle(), draw_text(), and that will handle the details
+
 /// Top-level canvas engine object
 pub struct CanvasEngine {
     ctx: CanvasRenderingContext2d,
@@ -304,9 +321,14 @@ pub struct CanvasEngine {
 
 impl CanvasEngine {
     pub fn new(w: Box<dyn Widget>) -> Self {
+        let mounted_widget = w.mount_widget(Point::default());
+        console::log_2(
+            &"Mounting to canvas: ".into(),
+            &format!("{}", mounted_widget).into(),
+        );
         Self {
             ctx: get_context(),
-            element: Some(w.mount_widget(Point::new())),
+            element: Some(mounted_widget),
         }
     }
 
@@ -315,6 +337,13 @@ impl CanvasEngine {
         // set canvas dimensions
         get_canvas().set_width(VALUES.canvas_size.0);
         get_canvas().set_height(VALUES.canvas_size.1);
+        // clear canvas
+        self.ctx.clear_rect(
+            0.0,
+            0.0,
+            VALUES.canvas_size.0.into(),
+            VALUES.canvas_size.1.into(),
+        );
         // Draw element, if any
         if let Some(w) = &self.element {
             w.draw(&self.ctx)?;

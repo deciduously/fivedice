@@ -136,7 +136,6 @@ impl Drawable for Die {
 impl Widget for Die {
     fn mount_widget(&self, top_left: Point) -> MountedWidget {
         let mut ret = MountedWidget::new(top_left);
-        // how do you do this??  Widget doesnt exist yet, you cant use it while its being implemented
         ret.set_drawable(Box::new(*self));
         ret
     }
@@ -192,51 +191,6 @@ impl Widget for Hand {
     }
 }
 
-/*
-TODO THIS WILL BE A WIDGET
-impl Drawable for Hand {
-    fn draw_at(&self, top_left: Point, ctx: &Context, values: &Values) -> Result<()> {
-        // draw each die
-        for (i, item) in self.dice.iter().enumerate().take(HAND_SIZE) {
-            // draw each die taking into account offsets for die index and global game offset
-            item.draw_at(
-                (
-                    values.dice_origin().0
-                        + (i as f64 * (values.dice_origin().0 + values.die_dimension)
-                            + values.padding)
-                        + top_left.x,
-                    values.dice_origin().1 + top_left.y,
-                )
-                    .into(),
-                &context,
-            )?;
-        }
-
-        // draw the Reroll button
-        let reroll_button_corners = values.reroll_button_corners(ctx);
-        let reroll_button_top_left = reroll_button_corners.0;
-        let reroll_button_bottom_right = reroll_button_corners.1;
-        draw_button(
-            values.reroll_button_text,
-            reroll_button_top_left.into(),
-            context,
-        )?;
-
-        // Draw remaining rolls readout
-        let remaining_rolls_x = (reroll_button_bottom_right.0 - reroll_button_top_left.0)
-            + (values.padding * 2.0)
-            + values.padding;
-        let remaining_rolls_y = reroll_button_bottom_right.1;
-        draw_text(
-            &format!("Rolls left: {}", self.remaining_rolls),
-            (remaining_rolls_x, remaining_rolls_y).into(),
-            ctx,
-        )?;
-
-        Ok(())
-    }
-}
-*/
 /// The Player object
 #[derive(Debug)]
 struct Player {
@@ -362,21 +316,6 @@ impl Game {
             self.player.current_hand.dice[die_idx].toggle_held();
         }
     }
-    /*
-    /// Redraw the screen
-    pub fn draw(&self) -> Result<()> {
-        let ctx = self.context.ctx;
-        let values = self.context.values;
-        ctx.clear_rect(
-            0.0,
-            0.0,
-            values.canvas_size.0.into(),
-            values.canvas_size.1.into(),
-        );
-        self.draw_at((0.0, 0.0).into(), &self.context)?;
-        Ok(())
-    }
-    */
 
     /// Handle all incoming messages
     /// TODO send an outgoing result?  Maybe use the memory tape for streaming events back
