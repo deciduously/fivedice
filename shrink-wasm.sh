@@ -16,42 +16,21 @@ function extract_size {
     wasm_size $1 | sed 's/^\([0-9]\+\).*/\1/'
 }
 
-# shink_speed TARGETNAME -f/--focus="size|speed", -l/--level="aggressive|normal", if either isnt understood defaults are speed | normal
+# $1 = target $2 = focus $3 = level
 function shrink {
-    # parse args
-    for i in "$@"
-    do
-    case $i in
-        -f=*|--focus=*)
-        FOCUS="${i#*=}"
-        shift
-        ;;
-        -l=*|--level=*)
-        LEVEL="${i#*=}"
-        shift
-        ;;
-        *)
-        # unknown option
-        ;;
-    esac
-    done
-    # last line is target, non-opt, no equals sign
-    if [[ -n $1 ]]; then
-        TARGET=$1
-    fi
     ARG='-O'
-    if [ "$FOCUS" = "size" ]; then
-        if [ "$LEVEL" = "aggressive" ]; then
+    if [ "$2" = "size" ]; then
+        if [ "$3" = "aggro" ]; then
             ARG="${ARG}z"
         else
             ARG="${ARG}s"
         fi
     else
-        if [ "$LEVEL" = "aggressive" ]; then
+        if [ "$3" = "aggro" ]; then
             ARG="${ARG}3"
         fi
     fi
-    COMMAND="wasm-opt $ARG -o $TARGET $WASM"
+    COMMAND="wasm-opt $ARG -o $1 $WASM"
     echo $COMMAND
     eval $COMMAND
 }
@@ -61,9 +40,9 @@ function choose_smaller {
     AGGRO='_aggressve'
     NORMAL_TARGET="${PKGDIR}/${BINARY}${NORMAL}.wasm"
     AGGRO_TARGET="${PKGDIR}/${BINARY}${AGGRO}.wasm"
-    eval shrink "-f=$1" $NORMAL_TARGET
+    shrink $NORMAL_TARGET $2 $3
     NORMAL_SIZE="$(eval extract_size $NORMAL_TARGET)"
-    eval shrink "-f=$1" -l=aggressive $AGGRO_TARGET
+    shrink $AGGRO_TARGET $2 $3 
     AGGRO_SIZE="$(eval extract_size $AGGRO_TARGET)"
     if [ $NORMAL_SIZE -lt $AGGRO_SIZE ]; then
         echo "Normal settings smaller, saving..."; mv $NORMAL_TARGET $WASM; rm $AGGRO_TARGET;
@@ -72,12 +51,48 @@ function choose_smaller {
     fi
 }
 
+# parse args
+for i in "$@"
+do
+case $i in
+    -f=*|--focus=*)
+    FOCUS="${i#*=}"
+    shift
+    ;;
+    -h=*|--help=*)
+    SHOWHELP=true
+    shift;;
+    -l=*|--level=*)
+    LEVEL="${i#*=}"
+    shift
+    ;;
+    *)
+    # unknown option
+    ;;
+esac
+done
+# last line is target, non-opt, no equals sign
+if [ -n $1 ]; then
+    TARGET=$1
+fi
+
+# If help requested, print it
+if [ -n $SHOWHELP ]; then
+    echo "Usage: $ ./shrink-wasm.sh {-f/--focus}={speed|size} {-l/--level}={normal|aggressive} target"
+    echo ""
+    echo "Defaults if either not found or not spelled correctly are \"speed\" and \"normal\""
+    echo ""
+fi
+
 echo_size $WASM
-echo "Shrinking, optimizing for ${1}"
-if [ "$1" = "size" ]; then
+echo "Shrinking, optimizing for ${FOCUS}."
+if [ ! -z "$LEVEL" ]; then
+    echo "Using aggressive optimizations."
+fi
+if [ "$FOCUS" = "size" ]; then
     choose_smaller $1
 else
-    shrink "-f=$1" -l=aggressive $WASM
+    shrink $WASM $FOCUS $LEVEL
 fi
 echo_size $WASM
 
