@@ -1,4 +1,4 @@
-use super::*;
+use super::{ffi::*, *};
 use web_sys::{CanvasRenderingContext2d, MouseEvent};
 /// Window error type
 #[derive(Debug)]

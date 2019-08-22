@@ -22,7 +22,6 @@ mod types;
 mod window;
 
 // Reexports
-pub use ffi::*;
 pub use traits::*;
 pub use types::*;
 pub use window::*;

@@ -1,4 +1,4 @@
-use super::*;
+use super::{ffi::get_context, *};
 /// A single coordinate point on the canvas, top left is 0,0
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
