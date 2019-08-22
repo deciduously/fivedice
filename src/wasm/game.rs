@@ -2,12 +2,13 @@
 
 use crate::{
     draw::{
-        Color, Drawable, MountedWidget, Point, Region, Text, Widget, Window, WindowResult, VALUES,
+        Color, Drawable, MountedWidget, Point, Region, Text, Widget, WindowPtr, WindowResult,
+        VALUES,
     },
     ffi::js_gen_range,
 };
 
-use std::{rc::Rc, str::FromStr};
+use std::str::FromStr;
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
@@ -93,18 +94,18 @@ impl Die {
 }
 
 impl Drawable for Die {
-    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
+    fn draw_at(&self, top_left: Point, w: WindowPtr) -> WindowResult<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
-        ctx.begin_path();
-        ctx.rect((top_left, VALUES.die_dimension, VALUES.die_dimension).into());
+        w.begin_path();
+        w.rect((top_left, VALUES.die_dimension, VALUES.die_dimension).into());
         if self.held {
-            ctx.set_color(Color::from_str("red")?);
+            w.set_color(Color::from_str("red")?);
         } else {
-            ctx.set_color(Color::from_str(VALUES.button_color)?);
+            w.set_color(Color::from_str(VALUES.button_color)?);
         }
         // TODO draw the dot pattern
-        ctx.text(
+        w.text(
             &format!("{:?}", self.value),
             &VALUES.get_font_string(),
             (
@@ -113,7 +114,7 @@ impl Drawable for Die {
             )
                 .into(),
         )?;
-        ctx.draw_path();
+        w.draw_path();
         Ok((
             top_left.x + VALUES.die_dimension,
             top_left.y + VALUES.die_dimension,

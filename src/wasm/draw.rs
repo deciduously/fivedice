@@ -3,7 +3,7 @@ use crate::{
     error::*,
     ffi::{get_canvas, get_context},
 };
-use std::{cell::Cell, fmt, rc::Rc, str::FromStr};
+use std::{cell::Cell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::JsValue;
 
 // You somehow need each thing to know where it is
@@ -32,6 +32,24 @@ pub struct Point {
     pub y: f64,
 }
 
+impl PartialOrd for Point {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.x < other.x && self.y < other.y {
+            Some(Ordering::Less)
+        } else if self.x == other.x && self.y == other.y {
+            Some(Ordering::Equal)
+        } else {
+            Some(Ordering::Greater)
+        }
+    }
+}
+
+impl PartialEq for Point {
+    fn eq(&self, other: &Self) -> bool {
+        self.x == other.x && self.y == other.y
+    }
+}
+
 impl fmt::Display for Point {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({}, {})", self.x, self.y)
@@ -55,7 +73,7 @@ impl Into<JsValue> for Point {
 }
 
 /// A rectangular region on the canvas
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct Region {
     o: Point,
     w: f64,
@@ -66,6 +84,10 @@ impl Region {
     /// Return this region's bottom right
     pub fn bottom_right(&self) -> Point {
         (self.o.x + self.w, self.o.y + self.h).into()
+    }
+    /// Return this region's top right
+    pub fn top_right(&self) -> Point {
+        (self.o.x + self.w, self.o.y).into()
     }
     /// Getter for origin
     pub fn origin(&self) -> Point {
@@ -78,6 +100,43 @@ impl Region {
     /// Getter for width
     pub fn width(&self) -> f64 {
         self.w
+    }
+}
+
+impl AddAssign for Region {
+    /// # Examples
+    /// ```
+    /// # fn main() {
+    ///     let mut orig: Region = (0.0, 0.0, 10.0, 10.0).into();
+    ///     let other1: Region = (4.0, 6.0, 20.0, 8.0).into();
+    ///     orig += other1;
+    ///     assert_eq!(orig, (0.0, 0.0, 16.0, 14.0));
+    /// # }
+    /// ```
+    fn add_assign(&mut self, other: Region) {
+        // keep the top_leftiest bottom_rightiest bottom_right
+        let bottom_right = self.bottom_right();
+        let o_bottom_right = other.bottom_right();
+        let top_right = self.top_right();
+        let o_top_right = other.top_right();
+        let o_winner = if self.o < other.origin() {
+            self.o
+        } else {
+            other.origin()
+        };
+        *self = Self {
+            o: o_winner,
+            w: if top_right.x > o_top_right.x {
+                top_right.x
+            } else {
+                o_top_right.x
+            },
+            h: if bottom_right.y > o_bottom_right.y {
+                bottom_right.y
+            } else {
+                o_bottom_right.y
+            },
+        };
     }
 }
 
@@ -152,7 +211,7 @@ impl FromStr for Color {
 pub trait Drawable {
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
-    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point>;
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point>;
     /// Get the Region of the bounding box of this drawable
     // TODO maybe should get ctx as well, for measure_text?  to avoid extra get_context() call
     fn get_region(&self, top_left: Point) -> Region;
@@ -199,25 +258,47 @@ impl MountedWidget {
     }
 
     /// Draw this element and update the cursor
-    fn draw(&self, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
+    fn draw(&self, ctx: WindowPtr) -> WindowResult<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
         if !self.children.is_empty() {
             for row in &self.children {
                 if !row.is_empty() {
-                    for child in row {
+                    // first mount all children in row
+                    let mounted_children = row.iter().fold(vec![], |mut acc, c| {
                         // mount the child
-                        let mounted_child = child.mount_widget(self.cursor.get());
+                        let mounted_child = c.mount_widget(self.cursor.get());
+                        // advance cursor
+                        self.cursor
+                            .set(mounted_child.get_region(self.cursor.get()).bottom_right());
+                        acc.push(mounted_child);
+                        acc
+                    });
+                    // Then draw them
+                    self.cursor.set(self.top_left);
+                    for (i, _) in row.iter().enumerate() {
                         // draw the child
-                        self.cursor.set(mounted_child.draw(Rc::clone(&ctx))?);
+                        let ctx = Rc::clone(&ctx);
+                        self.cursor.set(mounted_children[i].draw(ctx)?);
                         // advance the cursor horizontally by padding and back to where we started vertically
-
                         self.scroll_horizontal(VALUES.padding)?;
                         self.scroll_vertical(-(self.cursor.get().y - self.top_left.y))?;
                     }
                     // advance the cursor back to the beginning of the next line down
-                    self.scroll_vertical(VALUES.padding)?;
-                    self.scroll_horizontal(-(self.cursor.get().x - VALUES.padding))?;
+                    // RIGHT HERE it needs to be the mounted child's region
+                    // find tallest
+                    let vertical_offset = mounted_children
+                        .iter()
+                        .map(|c| {
+                            let ret = c.get_region(self.cursor.get());
+                            self.cursor.set(ret.bottom_right());
+                            ret.height() as u32
+                        })
+                        .max()
+                        .unwrap_or(self.cursor.get().y as u32);
+                    self.scroll_vertical(VALUES.padding + f64::from(vertical_offset))?;
+                    self.cursor
+                        .set((VALUES.padding, self.cursor.get().y).into());
                 }
             }
         }
@@ -227,7 +308,6 @@ impl MountedWidget {
         }
         Ok(self.cursor.get())
     }
-
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
         let num_rows = self.children.len();
@@ -281,14 +361,29 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(&self, _: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
+    fn draw_at(&self, _: Point, ctx: WindowPtr) -> WindowResult<Point> {
         // Return new cursor position, leaving at bottom right
 
         Ok(self.draw(ctx)?)
     }
     fn get_region(&self, _: Point) -> Region {
-        // The cursor will be left at where it was at last draw
-        (self.top_left, self.cursor.get()).into()
+        // Add up all the regions.
+        let mut ret = (self.top_left, 0.0, 0.0).into();
+        for row in &self.children {
+            for child in row {
+                let res = child.mount_widget(self.cursor.get());
+                self.cursor
+                    .set(res.get_region(self.cursor.get()).bottom_right());
+                ret += res.get_region(self.top_left);
+            }
+        }
+        // add any drawable
+        if let Some(d) = &self.drawable {
+            let new_region = d.get_region(self.cursor.get());
+            //self.cursor.set(new_region.bottom_right());
+            ret += d.get_region(new_region.origin());
+        }
+        ret
     }
 }
 
@@ -296,7 +391,7 @@ impl Drawable for MountedWidget {
 // Reusable Drawables
 //
 
-#[derive(Clone)]
+/// A widget that just draws some text
 pub struct Text {
     text: String,
 }
@@ -308,7 +403,7 @@ impl Text {
 }
 
 impl Drawable for Text {
-    fn draw_at(&self, top_left: Point, ctx: Rc<Box<dyn Window>>) -> WindowResult<Point> {
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
         ctx.begin_path();
         ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
         ctx.draw_path();
@@ -316,6 +411,7 @@ impl Drawable for Text {
     }
 
     fn get_region(&self, top_left: Point) -> Region {
+        // TODO remove this get_context()?
         let text_size = get_context()
             .measure_text(&self.text)
             .expect("Could not measure text");
@@ -331,7 +427,8 @@ impl Widget for Text {
     }
 }
 
-// TODO Button
+/// A clickable widget
+// pub struct Button {}
 
 // Values configuration
 // TODO this is very tightly coupled
@@ -434,18 +531,22 @@ pub trait Window {
     fn text(&self, text: &str, font: &str, origin: Point) -> WindowResult<()>;
 }
 
+/// Alias for a reference-counted pointer to a Window object
+pub type WindowPtr = Rc<Box<dyn Window>>;
+
 /// Top-level canvas engine object
 /// // TODO maybe a good spot to store values?
 pub struct WindowEngine {
-    window: Rc<Box<dyn Window>>,
+    window: WindowPtr,
     element: MountedWidget,
 }
 
 impl WindowEngine {
     pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
+        let window = Rc::new(w);
         let mounted_widget = e.mount_widget(Point::default());
         Self {
-            window: Rc::new(w),
+            window,
             element: mounted_widget,
         }
     }
@@ -458,7 +559,8 @@ impl WindowEngine {
         // clear canvas
         self.window.blank();
         // Draw element
-        self.element.draw(Rc::clone(&self.window))?;
+        let w = Rc::clone(&self.window);
+        self.element.draw(w)?;
         Ok(())
     }
 }
@@ -505,3 +607,32 @@ pub fn draw_button(
     Ok(())
 }
 */
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn test_add_adding_region() {
+        use super::Region;
+        let mut orig: Region = (0.0, 0.0, 10.0, 10.0).into();
+        let other: Region = (4.0, 6.0, 20.0, 8.0).into();
+        orig += other;
+        assert_eq!(orig, (0.0, 0.0, 24.0, 14.0).into());
+    }
+    #[test]
+    fn test_add_adding_up() {
+        use super::Region;
+        let mut orig: Region = (10.0, 10.0, 5.0, 5.0).into();
+        let other: Region = (4.0, 16.0, 10.0, 10.0).into();
+        orig += other;
+        assert_eq!(orig, (4.0, 16.0, 15.0, 26.0).into());
+    }
+
+    #[test]
+    fn test_add_disparate() {
+        use super::Region;
+        let mut orig: Region = (0.0, 0.0, 5.0, 5.0).into();
+        let other: Region = (13.0, 10.0, 5.0, 5.0).into();
+        orig += other;
+        assert_eq!(orig, (0.0, 0.0, 18.0, 15.0).into());
+    }
+}

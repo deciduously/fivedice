@@ -78,15 +78,20 @@ fi
 
 # If help requested, print it
 if [ -n $SHOWHELP ]; then
-    echo "Usage: $ ./shrink-wasm.sh {-f/--focus}={speed|size} {-l/--level}={normal|aggressive} target"
+    echo "Usage: $ ./shrink-wasm.sh {-f/--focus}={speed|size} {-l/--level}={normal|aggro} target"
     echo ""
     echo "Defaults if either not found or not spelled correctly are \"speed\" and \"normal\""
     echo ""
 fi
 
 echo_size $WASM
-echo "Shrinking, optimizing for ${FOCUS}."
-if [ ! -z "$LEVEL" ]; then
+if [ -z $FOCUS ]; then
+    FOCUS_STR='speed'
+else
+    FOCUS_STR=$FOCUS
+fi
+echo "Shrinking, optimizing for ${FOCUS_STR}."
+if [ "$LEVEL" = "aggro" ]; then
     echo "Using aggressive optimizations."
 fi
 if [ "$FOCUS" = "size" ]; then
