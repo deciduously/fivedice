@@ -1,22 +1,14 @@
 // lib.rs - Five Dice WASM module top-level
 
-#[macro_use]
-#[doc(hidden)]
-extern crate lazy_static;
-
 use wasm_bindgen::prelude::*;
 
-// Canvas drawing
-mod draw;
 // Error type
 mod error;
 // Game logic
 mod game;
 
-use crate::{
-    draw::{WebSysCanvas, WindowEngine},
-    game::Game,
-};
+use crate::game::Game;
+use widget_grid::window::{WebSysCanvas, WindowEngine};
 
 /// Entry point for the module
 #[allow(dead_code)]

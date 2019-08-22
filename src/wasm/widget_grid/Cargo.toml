@@ -1,0 +1,19 @@
+[package]
+authors = ["deciduously <ben@deciduously.com>"]
+description = "Canvas drawing library for WASM"
+edition = "2018"
+license = "MIT"
+name = "widget_grid"
+repository = "https://github.com/deciduously/widget-grid.git"
+version = "0.1.0"
+[dependencies]
+js-sys = "0.3"
+lazy_static = "1.3"
+wasm-bindgen = "0.2"
+
+[dependencies.web-sys]
+features = ["Attr", "CanvasRenderingContext2d", "Document", "DomRect", "DomRectReadOnly", "Element", "Event", "EventTarget", "HtmlCanvasElement", "HtmlElement", "HtmlInputElement", "MouseEvent", "Node", "Text", "TextMetrics", "Window"]
+version = "0.3"
+
+[profile.release]
+lto = true

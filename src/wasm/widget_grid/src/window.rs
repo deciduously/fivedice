@@ -15,7 +15,7 @@ impl fmt::Display for WindowError {
             Self::Element => write!(f, "Could not append element to DOM"),
             Self::JsVal(js) => write!(f, "{:#?}", js),
             Self::Text => write!(f, "Could not add text to the window"),
-            Self::OutOfBounds => write!(f, "Attempted to scroll cursor out of bounds!"),
+            Self::OutOfBounds => write!(f, "Attempted to scroll cursor out of bounds"),
         }
     }
 }
@@ -142,7 +142,7 @@ impl WindowEngine {
     }
 
     /// Draw elements
-    pub fn draw(&self) -> Result<()> {
+    pub fn draw(&self) -> WindowResult<()> {
         // set canvas dimensions
         get_canvas().set_width(VALUES.canvas_size.0);
         get_canvas().set_height(VALUES.canvas_size.1);

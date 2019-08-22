@@ -1,7 +1,7 @@
 // error.rs contains the error type for the application
-use crate::draw::WindowError;
 use std::fmt;
 use wasm_bindgen::JsValue;
+use widget_grid::window::WindowError;
 
 /// All possible Error types
 #[derive(Debug)]
@@ -18,8 +18,6 @@ impl fmt::Display for FiveDiceError {
         }
     }
 }
-
-pub type Result<T> = std::result::Result<T, FiveDiceError>;
 
 impl std::error::Error for FiveDiceError {}
 

@@ -1,10 +1,11 @@
 // game.rs contains the game logic
 
-use crate::draw::{
-    Color, Drawable, MountedWidget, Point, Region, Text, Widget, WindowPtr, WindowResult, VALUES,
-};
 use js_sys::Math::{floor, random};
 use std::str::FromStr;
+use widget_grid::{
+    window::{WindowPtr, WindowResult},
+    Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
+};
 
 /// use js Math.random() to get an integer in range [min, max)
 pub fn js_gen_range(min: i64, max: i64) -> i64 {
