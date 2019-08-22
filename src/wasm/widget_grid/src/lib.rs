@@ -1,14 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{
-    cell::{Cell, RefCell},
-    cmp::Ordering,
-    fmt,
-    ops::AddAssign,
-    rc::Rc,
-    str::FromStr,
-};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::console;
 /// DOM manipulation macros
@@ -35,6 +28,8 @@ pub trait Drawable {
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
+    /// Get the total of all regions of this widget
+    fn get_region(&self, top_left: Point) -> Region;
     /// Make this object into a Widget
     // TODO make a DSL for this - right now they're all:
     // {
@@ -60,9 +55,37 @@ pub struct Point {
     pub y: f64,
 }
 
+impl Point {
+    /// Set to point, specifically on canvas
+    fn set_to(&mut self, p: Point) -> WindowResult<()> {
+        if !VALUES.fits_canvas(p) {
+            return Err(WindowError::OutOfBounds(*self, p));
+        } else {
+            self.x = p.x;
+            self.y = p.y;
+            Ok(())
+        }
+    }
+    /// Horizontal offset
+    fn horiz_offset(&mut self, offset: f64) -> WindowResult<()> {
+        self.set_to((self.x + offset, self.y).into())?;
+        Ok(())
+    }
+    /// Vertical offset
+    fn vert_offset(&mut self, offset: f64) -> WindowResult<()> {
+        self.set_to((self.x, self.y + offset).into())?;
+        Ok(())
+    }
+    /// Return the distance between self and other
+    fn distance(&self, other: Point) -> f64 {
+        return ((other.x - self.x).powi(2) + (other.y - self.y).powi(2)).sqrt();
+    }
+}
+
 impl PartialOrd for Point {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if self.x < other.x && self.y < other.y {
+        // Return which is closer to the origin
+        if self.distance(Point::default()) < other.distance(Point::default()) {
             Some(Ordering::Less)
         } else if self.x == other.x && self.y == other.y {
             Some(Ordering::Equal)
@@ -134,11 +157,29 @@ impl Region {
 impl AddAssign for Region {
     /// # Examples
     /// ```
+    /// extern crate widget_grid;
+    /// use widget_grid::Region;
+    ///
     /// # fn main() {
     ///     let mut orig: Region = (0.0, 0.0, 10.0, 10.0).into();
     ///     let other1: Region = (4.0, 6.0, 20.0, 8.0).into();
     ///     orig += other1;
-    ///     assert_eq!(orig, (0.0, 0.0, 16.0, 14.0));
+    ///     assert_eq!(orig, (0.0, 0.0, 24.0, 14.0).into());
+    /// # }
+    /// # fn five_dice() {
+    ///     let dice = vec![
+    ///        (10.0, 0.0, 50.0, 50.0).into(),
+    ///        (70.0, 0.0, 50.0, 50.0).into(),
+    ///        (130.0, 0.0, 50.0, 50.0).into(),
+    ///        (190.0, 0.0, 50.0, 50.0).into(),
+    ///        (250.0, 0.0, 50.0, 50.0).into(),
+    ///    ];
+    ///    let mut total: Region = dice[0];
+    ///    for e in dice.iter().skip(1) {
+    ///        total += *e;
+    ///    }
+    ///    let expected = (10.0, 0.0, 300.0, 50.0).into();
+    ///    assert_eq!(total, expected);
     /// # }
     /// ```
     fn add_assign(&mut self, other: Region) {
@@ -240,7 +281,6 @@ impl FromStr for Color {
 pub struct MountedWidget {
     children: Vec<Vec<Box<dyn Widget>>>,
     drawable: Option<Box<dyn Drawable>>,
-    cursor: Cell<Point>,
     top_left: Point,
 }
 
@@ -249,49 +289,76 @@ impl MountedWidget {
         Self {
             children: vec![vec![]],
             drawable: None,
-            cursor: Cell::new(top_left),
             top_left,
         }
     }
 
-    /// Draw this element and update the cursor
-    pub fn draw(&self, ctx: WindowPtr) -> WindowResult<Point> {
-        // Draw all constituent widgets, updating the cursor after each
-        // Draw any child widgets
-        if !self.children.is_empty() {
+    /*
+    THIS WORKED
+      if self.children.len() > 0 {
             for row in &self.children {
-                if !row.is_empty() {
-                    // store the largest vertical offest in the row
-                    let mut vertical_offset = 0.0;
-                    // Draw each child
-                    self.set_cursor(self.top_left)?;
-                    for child in row.iter() {
-                        // Mount the child
+                if row.len() > 0 {
+                    for child in row {
+                        // mount the child
                         let mounted_child = child.mount_widget(self.cursor.get());
                         // draw the child
-                        let ctx = Rc::clone(&ctx);
-                        self.set_cursor(mounted_child.draw(ctx)?)?;
-                        // check if tallest
-                        let offset = self.cursor.get().y - self.top_left.y;
-                        if offset > vertical_offset {
-                            vertical_offset = offset;
-                        }
+                        self.cursor.set(mounted_child.draw(ctx)?);
                         // advance the cursor horizontally by padding and back to where we started vertically
+
                         self.scroll_horizontal(VALUES.padding)?;
-                        self.scroll_vertical(-(offset))?;
+                        self.scroll_vertical(-(self.cursor.get().y - self.top_left.y))?;
                     }
                     // advance the cursor back to the beginning of the next line down
-                    // Stand-in - just grab the first, for dice they're all the same
-                    self.scroll_vertical(VALUES.padding + vertical_offset)?;
-                    self.set_cursor((VALUES.padding, self.cursor.get().y).into())?;
+                    self.scroll_vertical(VALUES.padding)?;
+                    self.scroll_horizontal(-(self.cursor.get().x - VALUES.padding))?;
                 }
             }
         }
         // draw self, if present
         if let Some(d) = &self.drawable {
-            self.set_cursor(d.draw_at(self.cursor.get(), ctx)?)?;
+            self.cursor.set(d.draw_at(self.cursor.get(), ctx)?);
         }
         Ok(self.cursor.get())
+    */
+
+    /// Draw this element and update the cursor
+    pub fn draw(&self, ctx: WindowPtr) -> WindowResult<Point> {
+        // Draw all constituent widgets, updating the cursor after each
+        // Draw any child widgets
+        let mut cursor = self.top_left;
+        if !&self.children.is_empty() {
+            for row in &self.children {
+                if !row.is_empty() {
+                    // store the largest vertical offset in the row and row top left
+                    //let mut vertical_offset = 0.0;
+                    //let row_top_left = self.cursor.get();
+                    // Draw each child
+                    for child in row {
+                        // Mount the child
+                        let child_top_left = cursor;
+                        let mounted_child = child.mount_widget(child_top_left);
+                        // draw the child
+                        let ctx = Rc::clone(&ctx);
+                        let end_point = mounted_child.draw(ctx)?;
+                        //`// check if tallest
+                        //`let offset = end_point.y - row_top_left.y;
+                        //`if offset > vertical_offset {
+                        //`    vertical_offset = offset;
+                        //`}
+                        // scroll to the next top_left
+                        cursor.horiz_offset(VALUES.padding + end_point.x)?;
+                    }
+                }
+                // advance the cursor back to the beginning of the next line down
+                cursor.vert_offset(VALUES.padding)?;
+                cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+            }
+        }
+        // draw self, if present
+        if let Some(d) = &self.drawable {
+            cursor.set_to(d.draw_at(cursor, ctx)?)?;
+        }
+        Ok(cursor)
     }
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
@@ -303,33 +370,6 @@ impl MountedWidget {
     /// Add a new element to a new row
     pub fn push_new_row(&mut self, d: Box<dyn Widget>) {
         self.children.push(vec![d]);
-    }
-
-    /// Scroll cursor horizontally
-    pub fn scroll_horizontal(&self, offset: f64) -> WindowResult<()> {
-        let current = self.cursor.get();
-        let new_point = (current.x + offset, current.y).into();
-        self.set_cursor(new_point)?;
-        Ok(())
-    }
-
-    /// Scroll cursor vertical
-    pub fn scroll_vertical(&self, offset: f64) -> WindowResult<()> {
-        let current = self.cursor.get();
-        let new_point = (current.x, current.y + offset).into();
-        self.set_cursor(new_point)?;
-        Ok(())
-    }
-
-    /// Set cursor to a given point
-    fn set_cursor(&self, p: Point) -> WindowResult<()> {
-        let current = self.cursor.get();
-        if !VALUES.fits_canvas(p) {
-            return Err(WindowError::OutOfBounds(current, p));
-        } else {
-            self.cursor.set(p);
-            Ok(())
-        }
     }
 
     /// Set drawable for this widget - overrides any currently set
@@ -353,24 +393,23 @@ impl fmt::Display for MountedWidget {
 impl Drawable for MountedWidget {
     fn draw_at(&self, _: Point, ctx: WindowPtr) -> WindowResult<Point> {
         // Return new cursor position, leaving at bottom right
-
         Ok(self.draw(ctx)?)
     }
     fn get_region(&self, _: Point) -> Region {
         // Add up all the regions.
         let mut ret = (self.top_left, 0.0, 0.0).into();
+        let mut cursor = self.top_left;
         for row in &self.children {
             for child in row {
-                let res = child.mount_widget(self.cursor.get());
-                self.cursor
-                    .set(res.get_region(self.cursor.get()).bottom_right());
-                ret += res.get_region(self.top_left);
+                let child_top_left = cursor;
+                let r = child.get_region(child_top_left);
+                ret += r;
+                cursor.horiz_offset(VALUES.padding).expect("Illegal scroll");
             }
         }
         // add any drawable
         if let Some(d) = &self.drawable {
-            let new_region = d.get_region(self.cursor.get());
-            //self.cursor.set(new_region.bottom_right());
+            let new_region = d.get_region(cursor);
             ret += d.get_region(new_region.origin());
         }
         ret
@@ -397,7 +436,7 @@ impl Drawable for Text {
         ctx.begin_path();
         ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
         ctx.draw_path();
-        Ok(self.get_region(top_left).bottom_right())
+        Ok(Drawable::get_region(self, top_left).bottom_right())
     }
 
     fn get_region(&self, top_left: Point) -> Region {
@@ -414,6 +453,9 @@ impl Widget for Text {
         let mut ret = MountedWidget::new(top_left);
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
+    }
+    fn get_region(&self, top_left: Point) -> Region {
+        Drawable::get_region(self, top_left)
     }
 }
 
@@ -441,6 +483,7 @@ pub struct Values {
     pub font: &'static str,
     /// What size font on buttons
     pub button_font_size: u8,
+    /// General font size
     pub font_size: u8,
 }
 
@@ -451,9 +494,9 @@ impl Values {
 
     /// Return whether the given point fits on this canvas size
     fn fits_canvas(&self, p: Point) -> bool {
-        (p.x as u32) < self.canvas_size.0
+        p.x <= f64::from(self.canvas_size.0)
             && p.x >= 0.0
-            && (p.y as u32) < self.canvas_size.1
+            && p.y <= f64::from(self.canvas_size.1)
             && p.y >= 0.0
     }
 

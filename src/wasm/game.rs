@@ -95,12 +95,14 @@ impl Die {
     }
 }
 
+// TODO this will likely disappear and ust be bButtons added to the Widget impl
 impl Drawable for Die {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> WindowResult<Point> {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
         w.begin_path();
-        w.rect((top_left, VALUES.die_dimension, VALUES.die_dimension).into());
+        let outline_region = Drawable::get_region(self, top_left);
+        w.rect(outline_region);
         if self.held {
             w.set_color(Color::from_str("red")?);
         } else {
@@ -117,11 +119,7 @@ impl Drawable for Die {
                 .into(),
         )?;
         w.draw_path();
-        Ok((
-            top_left.x + VALUES.die_dimension,
-            top_left.y + VALUES.die_dimension,
-        )
-            .into())
+        Ok(outline_region.bottom_right())
     }
 
     fn get_region(&self, top_left: Point) -> Region {
@@ -138,6 +136,9 @@ impl Widget for Die {
         // TODO remove the text from the Drawable, use a Text node pushed to children
         ret.set_drawable(Box::new(*self));
         ret
+    }
+    fn get_region(&self, top_left: Point) -> Region {
+        Drawable::get_region(self, top_left)
     }
 }
 
@@ -191,6 +192,13 @@ impl Widget for Hand {
             "Remaining rolls: {}",
             self.remaining_rolls
         ))));
+        ret
+    }
+    fn get_region(&self, top_left: Point) -> Region {
+        let mut ret = Region::default();
+        for die in &self.dice {
+            ret += Drawable::get_region(die, top_left);
+        }
         ret
     }
 }
@@ -348,5 +356,8 @@ impl Widget for Game {
         let mut ret = MountedWidget::new(top_left);
         ret.push_current_row(self.player.get_hand());
         ret
+    }
+    fn get_region(&self, top_left: Point) -> Region {
+        self.player.get_hand().get_region(top_left)
     }
 }

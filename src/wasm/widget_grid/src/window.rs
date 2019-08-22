@@ -139,7 +139,6 @@ impl WindowEngine {
     pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
         let window = Rc::new(w);
         let mounted_widget = e.mount_widget(Point::default());
-        //console::log_2(&"Mounted: ".into(), &format!("{}", mounted_widget).into());
         Self {
             window,
             element: mounted_widget,

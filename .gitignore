@@ -1,7 +1,8 @@
-/target
+**/target
 **/*.rs.bk
 **/node_modules
 **/dist
 **/pkg
 .vscode
 post.md
+*/**/Cargo.lock
