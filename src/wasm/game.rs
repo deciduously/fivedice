@@ -135,6 +135,7 @@ impl Drawable for Die {
 impl Widget for Die {
     fn mount_widget(&self, top_left: Point) -> MountedWidget {
         let mut ret = MountedWidget::new(top_left);
+        // TODO remove the text from the Drawable, use a Text node pushed to children
         ret.set_drawable(Box::new(*self));
         ret
     }

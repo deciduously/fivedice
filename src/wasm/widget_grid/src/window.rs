@@ -1,11 +1,11 @@
 use super::{ffi::*, *};
-use web_sys::{CanvasRenderingContext2d, MouseEvent};
+use web_sys::{console, CanvasRenderingContext2d, MouseEvent};
 /// Window error type
 #[derive(Debug)]
 pub enum WindowError {
     Element,
     JsVal(JsValue),
-    OutOfBounds,
+    OutOfBounds(Point, Point),
     Text,
 }
 
@@ -15,7 +15,11 @@ impl fmt::Display for WindowError {
             Self::Element => write!(f, "Could not append element to DOM"),
             Self::JsVal(js) => write!(f, "{:#?}", js),
             Self::Text => write!(f, "Could not add text to the window"),
-            Self::OutOfBounds => write!(f, "Attempted to scroll cursor out of bounds"),
+            Self::OutOfBounds(origin, destination) => write!(
+                f,
+                "Attempted to scroll cursor out of bounds from {} to {}",
+                origin, destination
+            ),
         }
     }
 }
@@ -135,6 +139,7 @@ impl WindowEngine {
     pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
         let window = Rc::new(w);
         let mounted_widget = e.mount_widget(Point::default());
+        //console::log_2(&"Mounted: ".into(), &format!("{}", mounted_widget).into());
         Self {
             window,
             element: mounted_widget,
@@ -143,9 +148,6 @@ impl WindowEngine {
 
     /// Draw elements
     pub fn draw(&self) -> WindowResult<()> {
-        // set canvas dimensions
-        get_canvas().set_width(VALUES.canvas_size.0);
-        get_canvas().set_height(VALUES.canvas_size.1);
         // clear canvas
         self.window.blank();
         // Draw element
@@ -188,10 +190,10 @@ impl WindowEngine {
             let f = Rc::new(RefCell::new(None));
             let g = f.clone();
             *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                engine
-                    .borrow()
-                    .draw()
-                    .unwrap_or_else(|_| panic!("Window error on draw"));
+                // TODO feature-gate all console usage and the import
+                if let Err(e) = engine.borrow().draw() {
+                    console::log_2(&"Game error: ".into(), &format!("{}", e).into());
+                };
                 request_animation_frame(f.borrow().as_ref().unwrap());
             }) as Box<dyn FnMut()>));
             // Kick off the loop

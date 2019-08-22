@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-
+use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -218,7 +218,7 @@ impl fmt::Display for Color {
         } else if self.r == 0 && self.g == 0 && self.b == 0 {
             write!(f, "black")
         } else {
-            write!(f, "#{}{}{}", self.r, self.g, self.b)
+            write!(f, "#{:x}{:x}{:x}", self.r, self.g, self.b)
         }
     }
 }
@@ -261,47 +261,35 @@ impl MountedWidget {
         if !self.children.is_empty() {
             for row in &self.children {
                 if !row.is_empty() {
-                    // first mount all children in row
-                    let mounted_children = row.iter().fold(vec![], |mut acc, c| {
-                        // mount the child
-                        let mounted_child = c.mount_widget(self.cursor.get());
-                        // advance cursor
-                        self.cursor
-                            .set(mounted_child.get_region(self.cursor.get()).bottom_right());
-                        acc.push(mounted_child);
-                        acc
-                    });
-                    // Then draw them
-                    self.cursor.set(self.top_left);
-                    for (i, _) in row.iter().enumerate() {
+                    // store the largest vertical offest in the row
+                    let mut vertical_offset = 0.0;
+                    // Draw each child
+                    self.set_cursor(self.top_left)?;
+                    for child in row.iter() {
+                        // Mount the child
+                        let mounted_child = child.mount_widget(self.cursor.get());
                         // draw the child
                         let ctx = Rc::clone(&ctx);
-                        self.cursor.set(mounted_children[i].draw(ctx)?);
+                        self.set_cursor(mounted_child.draw(ctx)?)?;
+                        // check if tallest
+                        let offset = self.cursor.get().y - self.top_left.y;
+                        if offset > vertical_offset {
+                            vertical_offset = offset;
+                        }
                         // advance the cursor horizontally by padding and back to where we started vertically
                         self.scroll_horizontal(VALUES.padding)?;
-                        self.scroll_vertical(-(self.cursor.get().y - self.top_left.y))?;
+                        self.scroll_vertical(-(offset))?;
                     }
                     // advance the cursor back to the beginning of the next line down
-                    // RIGHT HERE it needs to be the mounted child's region
-                    // find tallest
-                    let vertical_offset = mounted_children
-                        .iter()
-                        .map(|c| {
-                            let ret = c.get_region(self.cursor.get());
-                            self.cursor.set(ret.bottom_right());
-                            ret.height() as u32
-                        })
-                        .max()
-                        .unwrap_or(self.cursor.get().y as u32);
-                    self.scroll_vertical(VALUES.padding + f64::from(vertical_offset))?;
-                    self.cursor
-                        .set((VALUES.padding, self.cursor.get().y).into());
+                    // Stand-in - just grab the first, for dice they're all the same
+                    self.scroll_vertical(VALUES.padding + vertical_offset)?;
+                    self.set_cursor((VALUES.padding, self.cursor.get().y).into())?;
                 }
             }
         }
         // draw self, if present
         if let Some(d) = &self.drawable {
-            self.cursor.set(d.draw_at(self.cursor.get(), ctx)?);
+            self.set_cursor(d.draw_at(self.cursor.get(), ctx)?)?;
         }
         Ok(self.cursor.get())
     }
@@ -321,10 +309,7 @@ impl MountedWidget {
     pub fn scroll_horizontal(&self, offset: f64) -> WindowResult<()> {
         let current = self.cursor.get();
         let new_point = (current.x + offset, current.y).into();
-        if !VALUES.fits_canvas(new_point) {
-            return Err(WindowError::OutOfBounds);
-        }
-        self.cursor.set(new_point);
+        self.set_cursor(new_point)?;
         Ok(())
     }
 
@@ -332,11 +317,19 @@ impl MountedWidget {
     pub fn scroll_vertical(&self, offset: f64) -> WindowResult<()> {
         let current = self.cursor.get();
         let new_point = (current.x, current.y + offset).into();
-        if !VALUES.fits_canvas(new_point) {
-            return Err(WindowError::OutOfBounds);
-        }
-        self.cursor.set(new_point);
+        self.set_cursor(new_point)?;
         Ok(())
+    }
+
+    /// Set cursor to a given point
+    fn set_cursor(&self, p: Point) -> WindowResult<()> {
+        let current = self.cursor.get();
+        if !VALUES.fits_canvas(p) {
+            return Err(WindowError::OutOfBounds(current, p));
+        } else {
+            self.cursor.set(p);
+            Ok(())
+        }
     }
 
     /// Set drawable for this widget - overrides any currently set
