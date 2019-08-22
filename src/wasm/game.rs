@@ -1,14 +1,15 @@
 // game.rs contains the game logic
 
-use crate::{
-    draw::{
-        Color, Drawable, MountedWidget, Point, Region, Text, Widget, WindowPtr, WindowResult,
-        VALUES,
-    },
-    ffi::js_gen_range,
+use crate::draw::{
+    Color, Drawable, MountedWidget, Point, Region, Text, Widget, WindowPtr, WindowResult, VALUES,
 };
-
+use js_sys::Math::{floor, random};
 use std::str::FromStr;
+
+/// use js Math.random() to get an integer in range [min, max)
+pub fn js_gen_range(min: i64, max: i64) -> i64 {
+    (floor(random() * (max as f64 - min as f64)) + min as f64) as i64
+}
 
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;

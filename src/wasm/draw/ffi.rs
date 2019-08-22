@@ -1,13 +1,5 @@
-// ffi.rs contains all JS<->Rust interop
-
-use crate::{
-    draw::{WebSysCanvas, WindowEngine},
-    game::Game,
-};
-use js_sys::Math::{floor, random};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
-
 /// Grab the body
 pub fn get_body() -> HtmlElement {
     get_document().body().expect("No <body> found in document")
@@ -50,27 +42,4 @@ pub fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     get_window()
         .request_animation_frame(f.as_ref().unchecked_ref())
         .expect("should register `requestAnimationFrame`");
-}
-
-/// use js Math.random() to get an integer in range [min, max)
-pub fn js_gen_range(min: i64, max: i64) -> i64 {
-    (floor(random() * (max as f64 - min as f64)) + min as f64) as i64
-}
-
-/// Entry point for the module
-#[allow(dead_code)]
-#[wasm_bindgen(start)]
-pub fn start() {
-    // Instantiate canvas
-    let renderable_context =
-        Box::new(WebSysCanvas::new("Five Dice").expect("Could not instantiate canvas"));
-
-    // Instantiate game
-    let game = Box::new(Game::new());
-
-    // Instantiate engine
-    let engine = WindowEngine::new(renderable_context, game);
-
-    // Run game
-    engine.start();
 }
