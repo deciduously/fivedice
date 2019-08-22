@@ -77,12 +77,12 @@ if [ -n $1 ]; then
 fi
 
 # If help requested, print it
-if [ -n $SHOWHELP ]; then
-    echo "Usage: $ ./shrink-wasm.sh {-f/--focus}={speed|size} {-l/--level}={normal|aggro} target"
-    echo ""
-    echo "Defaults if either not found or not spelled correctly are \"speed\" and \"normal\""
-    echo ""
-fi
+#if [ -n $SHOWHELP ]; then
+#    echo "Usage: $ ./shrink-wasm.sh {-f/--focus}={speed|size} {-l/--level}={normal|aggro} target"
+#    echo ""
+#    echo "Defaults if either not found or not spelled correctly are \"speed\" and \"normal\""
+#    echo ""
+#fi
 
 echo_size $WASM
 if [ -z $FOCUS ]; then
