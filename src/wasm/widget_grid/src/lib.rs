@@ -62,7 +62,7 @@ impl Point {
     /// Set to point, specifically on canvas
     fn set_to(&mut self, p: Point) -> Result<()> {
         if !VALUES.fits_canvas(p) {
-            return Err(WindowError::OutOfBounds(*self, p));
+            Err(WindowError::OutOfBounds(*self, p))
         } else {
             self.x = p.x;
             self.y = p.y;
@@ -81,7 +81,7 @@ impl Point {
     }
     /// Return the distance between self and other
     fn distance(&self, other: Point) -> f64 {
-        return ((other.x - self.x).powi(2) + (other.y - self.y).powi(2)).sqrt();
+        ((other.x - self.x).powi(2) + (other.y - self.y).powi(2)).sqrt()
     }
 }
 
@@ -166,6 +166,7 @@ impl Region {
     }
 }
 
+// TODO i dont think I ended up using this?
 impl AddAssign for Region {
     /// # Examples
     /// ```
@@ -301,7 +302,6 @@ impl FromStr for Color {
 }
 
 /// A container struct for a widget
-#[derive(Default)]
 pub struct MountedWidget {
     children: Vec<Vec<Box<dyn Widget>>>,
     drawable: Option<Box<dyn Drawable>>,
@@ -331,8 +331,11 @@ impl MountedWidget {
                         let mounted_child = child.mount_widget();
                         // draw the child
                         let ctx = Rc::clone(&ctx);
-                        console::log_2(&"Drawing child at".into(), &format!("{}", cursor).into());
-                        cursor.set_to(mounted_child.draw(cursor, ctx)?)?;
+                        //console::log_2(
+                        //    &"Drawing child at".into(),
+                        //    &format!("{}", child_top_left).into(),
+                        //);
+                        cursor.set_to(mounted_child.draw(child_top_left, ctx)?)?;
                         //`// check if tallest
                         //`let offset = end_point.y - row_top_left.y;
                         //`if offset > vertical_offset {
@@ -340,9 +343,13 @@ impl MountedWidget {
                         //`}
                         // scroll to the next top_left
                         // store possible bottom right
-                        bottom_right = cursor;
+                        let child_bottom_right =
+                            mounted_child.get_region(child_top_left)?.bottom_right();
+                        if child_bottom_right > bottom_right {
+                            bottom_right = child_bottom_right;
+                        }
                         cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                        cursor.horiz_offset(VALUES.padding + (cursor.x - child_top_left.x))?;
+                        cursor.horiz_offset(VALUES.padding)?;
                     }
                 }
                 // advance the cursor back to the beginning of the next line down
@@ -381,6 +388,15 @@ impl MountedWidget {
     }
 }
 
+impl Default for MountedWidget {
+    fn default() -> Self {
+        Self {
+            children: vec![vec![]],
+            drawable: None,
+        }
+    }
+}
+
 impl fmt::Display for MountedWidget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -398,22 +414,23 @@ impl Drawable for MountedWidget {
         Ok(self.draw(top_left, ctx)?)
     }
     fn get_region(&self, top_left: Point) -> Result<Region> {
-        // TODO but you have a shared reference problem
-        // The drawable should always encompass any contained widgets
-        let mut ret = (top_left, 0.0, 0.0).into();
+        // TODO this is the same as drawing but...doesn't draw
         let mut cursor = top_left;
+        let mut bottom_right = top_left;
         for row in &self.children {
             for child in row {
                 let child_top_left = cursor;
                 let region = child.get_region(child_top_left)?;
-                ret += region;
+                if region.bottom_right() > bottom_right {
+                    bottom_right = region.bottom_right();
+                }
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                cursor.horiz_offset(VALUES.padding + (cursor.x - child_top_left.x))?;
+                cursor.horiz_offset(VALUES.padding)?;
             }
             cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
             cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
         }
-        Ok(ret)
+        Ok((top_left, bottom_right).into())
     }
 }
 
