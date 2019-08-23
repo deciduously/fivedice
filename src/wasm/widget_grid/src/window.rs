@@ -17,6 +17,8 @@ pub trait Window {
     fn set_color(&self, color_str: Color);
     /// Draw some text
     fn text(&self, text: &str, font: &str, origin: Point) -> Result<()>;
+    /// Get the width of the text
+    fn text_width(&self, text: &str) -> Result<f64>;
 }
 
 /// Alias for a reference-counted pointer to a Window object
@@ -87,6 +89,13 @@ impl Window for WebSysCanvas {
         }
         Ok(())
     }
+    fn text_width(&self, text: &str) -> Result<f64> {
+        let res = self.ctx.measure_text(text);
+        match res {
+            Ok(tm) => Ok(tm.width()),
+            Err(e) => Err(WindowError::JsVal(e)),
+        }
+    }
 }
 
 /// Top-level canvas engine object
@@ -151,7 +160,6 @@ impl WindowEngine {
             let f = Rc::new(RefCell::new(None));
             let g = f.clone();
             *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                // TODO feature-gate all console usage and the import
                 if let Err(e) = engine.borrow().draw() {
                     console::error_2(&"Game error: ".into(), &format!("{}", e).into());
                 };

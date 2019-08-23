@@ -24,7 +24,7 @@ pub use window::*;
 // You should be able to define a 2D vector of Box<dyn Widget>
 // and pass it to a function, that builds the MountedWidget for you
 // it should also be able to auto-derive get_region(), that's a solved problem
-// First, get Button and Clickable done
+// First, Clickable done
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
@@ -32,15 +32,14 @@ pub trait Drawable {
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
     fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point>;
     /// Get the Region of the bounding box of this drawable
-    // TODO maybe should get ctx as well, for measure_text?  to avoid extra get_context() call
-    fn get_region(&self, top_left: Point) -> Result<Region>;
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region>;
 }
 
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     /// Get the total of all regions of this widget
-    fn get_region(&self, top_left: Point) -> Result<Region>;
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region>;
     /// Make this object into a Widget
     // TODO make a DSL for this - right now they're all:
     // {
@@ -174,7 +173,6 @@ impl Region {
     }
 }
 
-// TODO i dont think I ended up using this?
 impl AddAssign for Region {
     /// # Examples
     /// ```
@@ -326,33 +324,27 @@ impl MountedWidget {
         // Draw any child widgets
         let mut cursor = top_left;
         let mut bottom_right = top_left;
+        let mut vertical_offset = 0.0;
         if !&self.children.is_empty() {
             for row in &self.children {
+                let row_top_left = cursor;
                 if !row.is_empty() {
-                    // store the largest vertical offset in the row and row top left
-                    //let mut vertical_offset = 0.0;
-                    //let row_top_left = self.cursor.get();
                     // Draw each child
                     for child in row {
                         // Mount the child
                         let child_top_left = cursor;
                         let mounted_child = child.mount_widget();
                         // draw the child
-                        let ctx = Rc::clone(&ctx);
-                        //console::log_2(
-                        //    &"Drawing child at".into(),
-                        //    &format!("{}", child_top_left).into(),
-                        //);
-                        cursor.set_to(mounted_child.draw(child_top_left, ctx)?)?;
-                        //`// check if tallest
-                        //`let offset = end_point.y - row_top_left.y;
-                        //`if offset > vertical_offset {
-                        //`    vertical_offset = offset;
-                        //`}
-                        // scroll to the next top_left
+                        cursor.set_to(mounted_child.draw(child_top_left, Rc::clone(&ctx))?)?;
+                        // check if tallest
+                        let offset = cursor.y - row_top_left.y;
+                        if offset > vertical_offset {
+                            vertical_offset = offset;
+                        }
                         // store possible bottom right
-                        let child_bottom_right =
-                            mounted_child.get_region(child_top_left)?.bottom_right();
+                        let child_bottom_right = mounted_child
+                            .get_region(child_top_left, Rc::clone(&ctx))?
+                            .bottom_right();
                         if child_bottom_right > bottom_right {
                             bottom_right = child_bottom_right;
                         }
@@ -361,8 +353,7 @@ impl MountedWidget {
                     }
                 }
                 // advance the cursor back to the beginning of the next line down
-                // TODO die_dimension is a stand, in, use the vert_offset stuff
-                cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+                cursor.vert_offset((VALUES.padding * 2.0) + vertical_offset)?;
                 cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
             }
         }
@@ -421,14 +412,14 @@ impl Drawable for MountedWidget {
         // Return new cursor position, leaving at bottom right
         Ok(self.draw(top_left, ctx)?)
     }
-    fn get_region(&self, top_left: Point) -> Result<Region> {
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
         // TODO this is the same as drawing but...doesn't draw
         let mut cursor = top_left;
         let mut bottom_right = top_left;
         for row in &self.children {
             for child in row {
                 let child_top_left = cursor;
-                let region = child.get_region(child_top_left)?;
+                let region = child.get_region(child_top_left, Rc::clone(&ctx))?;
                 if region.bottom_right() > bottom_right {
                     bottom_right = region.bottom_right();
                 }
@@ -462,16 +453,16 @@ impl Drawable for Text {
         ctx.begin_path();
         ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
         ctx.draw_path();
-        Ok(Drawable::get_region(self, top_left)?.bottom_right())
+        Ok(Drawable::get_region(self, top_left, ctx)?.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point) -> Result<Region> {
-        // TODO remove this get_context()?
-        let text_size = get_context().measure_text(&self.text);
-        match text_size {
-            Ok(s) => Ok((top_left, s.width(), f64::from(VALUES.font_size)).into()),
-            Err(e) => Err(WindowError::JsVal(e)),
-        }
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
+        Ok((
+            top_left,
+            ctx.text_width(&self.text)?,
+            f64::from(VALUES.font_size),
+        )
+            .into())
     }
 }
 
@@ -482,8 +473,8 @@ impl Widget for Text {
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }
-    fn get_region(&self, top_left: Point) -> Result<Region> {
-        Drawable::get_region(self, top_left)
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
+        Drawable::get_region(self, top_left, ctx)
     }
 }
 
@@ -501,7 +492,7 @@ impl Button {
 impl Drawable for Button {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
-        let outline = Drawable::get_region(self, top_left)?;
+        let outline = Drawable::get_region(self, top_left, Rc::clone(&w))?;
         w.rect(outline);
         w.text(
             &self.text,
@@ -516,8 +507,7 @@ impl Drawable for Button {
         Ok(outline.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point) -> Result<Region> {
-        // TODO there's another get_context() here
+    fn get_region(&self, top_left: Point, _: WindowPtr) -> Result<Region> {
         Ok((
             top_left,
             get_context()
@@ -532,8 +522,8 @@ impl Drawable for Button {
 }
 
 impl Widget for Button {
-    fn get_region(&self, top_left: Point) -> Result<Region> {
-        Drawable::get_region(self, top_left)
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
+        Drawable::get_region(self, top_left, ctx)
     }
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
