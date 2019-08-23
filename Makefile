@@ -4,7 +4,7 @@ RUSTCLEAN=cargo clean
 RUST=wasm-pack build
 OPKGDIR=pkg
 EXEC=fivedice_bg.wasm
-OPT=./shrink-wasm.sh -l=aggro
+OPT=./shrink-wasm.sh -f=speed -l=aggro
 
 all: $(PKGDIR)/$(EXEC)
 	$(OPT)

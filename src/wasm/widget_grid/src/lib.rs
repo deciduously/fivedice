@@ -37,7 +37,7 @@ pub trait Widget {
     //     //push some elements
     //     ret
     // }
-    fn mount_widget(&self, top_left: Point) -> MountedWidget;
+    fn mount_widget(&self) -> MountedWidget;
 }
 
 /// Trait representing Drawables that can be clicked
@@ -281,15 +281,13 @@ impl FromStr for Color {
 pub struct MountedWidget {
     children: Vec<Vec<Box<dyn Widget>>>,
     drawable: Option<Box<dyn Drawable>>,
-    top_left: Point,
 }
 
 impl MountedWidget {
-    pub fn new(top_left: Point) -> Self {
+    pub fn new() -> Self {
         Self {
             children: vec![vec![]],
             drawable: None,
-            top_left,
         }
     }
 
@@ -322,10 +320,10 @@ impl MountedWidget {
     */
 
     /// Draw this element and update the cursor
-    pub fn draw(&self, ctx: WindowPtr) -> WindowResult<Point> {
+    pub fn draw(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
-        let mut cursor = self.top_left;
+        let mut cursor = top_left;
         if !&self.children.is_empty() {
             for row in &self.children {
                 if !row.is_empty() {
@@ -335,11 +333,11 @@ impl MountedWidget {
                     // Draw each child
                     for child in row {
                         // Mount the child
-                        let child_top_left = cursor;
-                        let mounted_child = child.mount_widget(child_top_left);
+                        console::log_2(&"Mounting child at".into(), &format!("{}", cursor).into());
+                        let mounted_child = child.mount_widget();
                         // draw the child
                         let ctx = Rc::clone(&ctx);
-                        let end_point = mounted_child.draw(ctx)?;
+                        let end_point = mounted_child.draw(cursor, ctx)?;
                         //`// check if tallest
                         //`let offset = end_point.y - row_top_left.y;
                         //`if offset > vertical_offset {
@@ -350,7 +348,8 @@ impl MountedWidget {
                     }
                 }
                 // advance the cursor back to the beginning of the next line down
-                cursor.vert_offset(VALUES.padding)?;
+                // TODO die_dimension is a stand, in, use the vert_offset stuff
+                cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
                 cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
             }
         }
@@ -382,8 +381,7 @@ impl fmt::Display for MountedWidget {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Mounted Widget at {} with {} rows of children,{} drawable",
-            self.top_left,
+            "Mounted Widget: {} rows of children,{} drawable",
             self.children.len(),
             if self.drawable.is_some() { "" } else { " not" }
         )
@@ -391,14 +389,14 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(&self, _: Point, ctx: WindowPtr) -> WindowResult<Point> {
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
         // Return new cursor position, leaving at bottom right
-        Ok(self.draw(ctx)?)
+        Ok(self.draw(top_left, ctx)?)
     }
-    fn get_region(&self, _: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> Region {
         // Add up all the regions.
-        let mut ret = (self.top_left, 0.0, 0.0).into();
-        let mut cursor = self.top_left;
+        let mut ret = (top_left, 0.0, 0.0).into();
+        let mut cursor = top_left;
         for row in &self.children {
             for child in row {
                 let child_top_left = cursor;
@@ -449,8 +447,8 @@ impl Drawable for Text {
 }
 
 impl Widget for Text {
-    fn mount_widget(&self, top_left: Point) -> MountedWidget {
-        let mut ret = MountedWidget::new(top_left);
+    fn mount_widget(&self) -> MountedWidget {
+        let mut ret = MountedWidget::new();
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }

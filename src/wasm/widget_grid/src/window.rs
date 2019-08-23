@@ -138,7 +138,7 @@ pub struct WindowEngine {
 impl WindowEngine {
     pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
         let window = Rc::new(w);
-        let mounted_widget = e.mount_widget(Point::default());
+        let mounted_widget = e.mount_widget();
         Self {
             window,
             element: mounted_widget,
@@ -151,7 +151,7 @@ impl WindowEngine {
         self.window.blank();
         // Draw element
         let w = Rc::clone(&self.window);
-        self.element.draw(w)?;
+        self.element.draw(Point::default(), w)?;
         Ok(())
     }
 

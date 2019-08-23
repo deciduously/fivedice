@@ -131,8 +131,8 @@ impl Drawable for Die {
 // I smell a macro DSL?  Just one variadic macro should do it at first
 
 impl Widget for Die {
-    fn mount_widget(&self, top_left: Point) -> MountedWidget {
-        let mut ret = MountedWidget::new(top_left);
+    fn mount_widget(&self) -> MountedWidget {
+        let mut ret = MountedWidget::new();
         // TODO remove the text from the Drawable, use a Text node pushed to children
         ret.set_drawable(Box::new(*self));
         ret
@@ -182,8 +182,8 @@ impl Default for Hand {
 }
 
 impl Widget for Hand {
-    fn mount_widget(&self, top_left: Point) -> MountedWidget {
-        let mut ret = MountedWidget::new(top_left);
+    fn mount_widget(&self) -> MountedWidget {
+        let mut ret = MountedWidget::new();
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
@@ -195,7 +195,7 @@ impl Widget for Hand {
         ret
     }
     fn get_region(&self, top_left: Point) -> Region {
-        let mut ret = Region::default();
+        let mut ret = (top_left, 0.0, 0.0).into();
         for die in &self.dice {
             ret += Drawable::get_region(die, top_left);
         }
@@ -352,8 +352,8 @@ impl Game {
 }
 
 impl Widget for Game {
-    fn mount_widget(&self, top_left: Point) -> MountedWidget {
-        let mut ret = MountedWidget::new(top_left);
+    fn mount_widget(&self) -> MountedWidget {
+        let mut ret = MountedWidget::new();
         ret.push_current_row(self.player.get_hand());
         ret
     }
