@@ -7,6 +7,7 @@ name = "fivedice"
 repository = "https://github.com/deciduously/fivedice.git"
 version = "0.1.0"
 [dependencies]
+console_error_panic_hook = "0.1"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 
@@ -19,4 +20,3 @@ path = "src/wasm/lib.rs"
 
 [profile.release]
 lto = true
-# opt-level = 'z' # or s for less aggressive, but sometimes more effective, always measure

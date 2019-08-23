@@ -18,6 +18,14 @@ pub use error::*;
 use ffi::get_context;
 pub use window::*;
 
+// TODO
+// Ideally, I don't want to expose Drawable, just widget
+// Also, I don't want to have to implement Widget manually
+// You should be able to define a 2D vector of Box<dyn Widget>
+// and pass it to a function, that builds the MountedWidget for you
+// it should also be able to auto-derive get_region(), that's a solved problem
+// First, get Button and Clickable done
+
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
     /// Draw this game element with the given top left corner

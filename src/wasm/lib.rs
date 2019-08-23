@@ -14,6 +14,7 @@ use widget_grid::window::{WebSysCanvas, WindowEngine};
 #[allow(dead_code)]
 #[wasm_bindgen(start)]
 pub fn start() {
+    console_error_panic_hook::set_once();
     // Instantiate canvas
     let renderable_context =
         Box::new(WebSysCanvas::new("Five Dice").expect("Could not instantiate canvas"));

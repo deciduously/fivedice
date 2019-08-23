@@ -98,6 +98,7 @@ pub struct WindowEngine {
 
 impl WindowEngine {
     pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
+        console_error_panic_hook::set_once();
         let window = Rc::new(w);
         let mounted_widget = e.mount_widget();
         Self {
