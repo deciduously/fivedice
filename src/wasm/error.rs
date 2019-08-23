@@ -1,7 +1,7 @@
 // error.rs contains the error type for the application
 use std::fmt;
 use wasm_bindgen::JsValue;
-use widget_grid::window::WindowError;
+use widget_grid::WindowError;
 
 /// All possible Error types
 #[derive(Debug)]

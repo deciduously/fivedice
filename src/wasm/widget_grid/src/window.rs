@@ -1,44 +1,5 @@
 use super::{ffi::*, *};
 use web_sys::{console, CanvasRenderingContext2d, MouseEvent};
-/// Window error type
-#[derive(Debug)]
-pub enum WindowError {
-    Element,
-    JsVal(JsValue),
-    OutOfBounds(Point, Point),
-    Text,
-}
-
-impl fmt::Display for WindowError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Element => write!(f, "Could not append element to DOM"),
-            Self::JsVal(js) => write!(f, "{:#?}", js),
-            Self::Text => write!(f, "Could not add text to the window"),
-            Self::OutOfBounds(origin, destination) => write!(
-                f,
-                "Attempted to scroll cursor out of bounds from {} to {}",
-                origin, destination
-            ),
-        }
-    }
-}
-
-impl From<JsValue> for WindowError {
-    fn from(other: JsValue) -> Self {
-        WindowError::JsVal(other)
-    }
-}
-
-impl Into<JsValue> for WindowError {
-    fn into(self) -> JsValue {
-        format!("{}", self).into()
-    }
-}
-
-impl std::error::Error for WindowError {}
-
-pub type WindowResult<T> = std::result::Result<T, WindowError>;
 
 /// Trait representing a canvas to be drawn to.  For now, only supports CanvasRenderingContext2d
 pub trait Window {
@@ -55,7 +16,7 @@ pub trait Window {
     /// Set pen color
     fn set_color(&self, color_str: Color);
     /// Draw some text
-    fn text(&self, text: &str, font: &str, origin: Point) -> WindowResult<()>;
+    fn text(&self, text: &str, font: &str, origin: Point) -> Result<()>;
 }
 
 /// Alias for a reference-counted pointer to a Window object
@@ -67,7 +28,7 @@ pub struct WebSysCanvas {
 }
 
 impl WebSysCanvas {
-    pub fn new(title: &str) -> WindowResult<Self> {
+    pub fn new(title: &str) -> Result<Self> {
         // Set up page
         let document = get_document();
         let body = get_body();
@@ -119,7 +80,7 @@ impl Window for WebSysCanvas {
     fn set_color(&self, color: Color) {
         self.ctx.set_stroke_style(&format!("{}", color).into());
     }
-    fn text(&self, text: &str, font: &str, origin: Point) -> WindowResult<()> {
+    fn text(&self, text: &str, font: &str, origin: Point) -> Result<()> {
         self.ctx.set_font(font);
         if self.ctx.fill_text(text, origin.x, origin.y).is_err() {
             return Err(WindowError::Text);
@@ -146,7 +107,7 @@ impl WindowEngine {
     }
 
     /// Draw elements
-    pub fn draw(&self) -> WindowResult<()> {
+    pub fn draw(&self) -> Result<()> {
         // clear canvas
         self.window.blank();
         // Draw element

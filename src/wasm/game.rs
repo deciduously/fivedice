@@ -3,9 +3,10 @@
 use js_sys::Math::{floor, random};
 use std::str::FromStr;
 use widget_grid::{
-    window::{WindowPtr, WindowResult},
-    Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
+    window::WindowPtr, Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
 };
+
+type WindowResult<T> = widget_grid::Result<T>;
 
 /// use js Math.random() to get an integer in range [min, max)
 pub fn js_gen_range(min: i64, max: i64) -> i64 {
@@ -101,7 +102,7 @@ impl Drawable for Die {
         // draw a rectangle
         // if it's held, set the font color to red, otherwise black
         w.begin_path();
-        let outline_region = Drawable::get_region(self, top_left);
+        let outline_region = Drawable::get_region(self, top_left)?;
         w.rect(outline_region);
         if self.held {
             w.set_color(Color::from_str("red")?);
@@ -122,8 +123,8 @@ impl Drawable for Die {
         Ok(outline_region.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point) -> Region {
-        (top_left, VALUES.die_dimension, VALUES.die_dimension).into()
+    fn get_region(&self, top_left: Point) -> WindowResult<Region> {
+        Ok((top_left, VALUES.die_dimension, VALUES.die_dimension).into())
     }
 }
 
@@ -137,7 +138,7 @@ impl Widget for Die {
         ret.set_drawable(Box::new(*self));
         ret
     }
-    fn get_region(&self, top_left: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> WindowResult<Region> {
         Drawable::get_region(self, top_left)
     }
 }
@@ -194,12 +195,12 @@ impl Widget for Hand {
         ))));
         ret
     }
-    fn get_region(&self, top_left: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> WindowResult<Region> {
         let mut ret = (top_left, 0.0, 0.0).into();
         for die in &self.dice {
-            ret += Drawable::get_region(die, top_left);
+            ret += Drawable::get_region(die, top_left)?;
         }
-        ret
+        Ok(ret)
     }
 }
 
@@ -357,7 +358,7 @@ impl Widget for Game {
         ret.push_current_row(self.player.get_hand());
         ret
     }
-    fn get_region(&self, top_left: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> WindowResult<Region> {
         self.player.get_hand().get_region(top_left)
     }
 }

@@ -7,29 +7,32 @@ use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
+/// Error type
+pub mod error;
 /// FFI initiation
 mod ffi;
 /// Window and WebSysCanvas
 pub mod window;
 
+pub use error::*;
 use ffi::get_context;
-use window::*;
+pub use window::*;
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point>;
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point>;
     /// Get the Region of the bounding box of this drawable
     // TODO maybe should get ctx as well, for measure_text?  to avoid extra get_context() call
-    fn get_region(&self, top_left: Point) -> Region;
+    fn get_region(&self, top_left: Point) -> Result<Region>;
 }
 
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     /// Get the total of all regions of this widget
-    fn get_region(&self, top_left: Point) -> Region;
+    fn get_region(&self, top_left: Point) -> Result<Region>;
     /// Make this object into a Widget
     // TODO make a DSL for this - right now they're all:
     // {
@@ -57,7 +60,7 @@ pub struct Point {
 
 impl Point {
     /// Set to point, specifically on canvas
-    fn set_to(&mut self, p: Point) -> WindowResult<()> {
+    fn set_to(&mut self, p: Point) -> Result<()> {
         if !VALUES.fits_canvas(p) {
             return Err(WindowError::OutOfBounds(*self, p));
         } else {
@@ -67,12 +70,12 @@ impl Point {
         }
     }
     /// Horizontal offset
-    fn horiz_offset(&mut self, offset: f64) -> WindowResult<()> {
+    fn horiz_offset(&mut self, offset: f64) -> Result<()> {
         self.set_to((self.x + offset, self.y).into())?;
         Ok(())
     }
     /// Vertical offset
-    fn vert_offset(&mut self, offset: f64) -> WindowResult<()> {
+    fn vert_offset(&mut self, offset: f64) -> Result<()> {
         self.set_to((self.x, self.y + offset).into())?;
         Ok(())
     }
@@ -152,6 +155,15 @@ impl Region {
     pub fn width(&self) -> f64 {
         self.w
     }
+
+    /// Add/remove width
+    pub fn width_offset(&mut self, offset: f64) {
+        self.w += offset;
+    }
+    /// Add/remove height
+    pub fn height_offset(&mut self, offset: f64) {
+        self.h += offset;
+    }
 }
 
 impl AddAssign for Region {
@@ -180,6 +192,18 @@ impl AddAssign for Region {
     ///    }
     ///    let expected = (10.0, 0.0, 300.0, 50.0).into();
     ///    assert_eq!(total, expected);
+    /// # }
+    /// # fn add_self_to_self() {
+    ///     let mut r1: Region = (0.0, 0.0, 10.0, 10.0).into();
+    ///     let r2 = (0.0, 0.0, 10.0, 10.0).into();
+    ///     r1 += r2;
+    ///     assert_eq!(r1, r2);
+    /// # }
+    /// # fn add_smaller_than() {
+    ///     let r1: Region = (0.0, 0.0, 10.0, 10.0).into();
+    ///     let mut r2 = r1;
+    ///     r2 += (2.0, 2.0, 2.0, 2.0).into();
+    ///     assert_eq!(r1, r2);
     /// # }
     /// ```
     fn add_assign(&mut self, other: Region) {
@@ -285,45 +309,15 @@ pub struct MountedWidget {
 
 impl MountedWidget {
     pub fn new() -> Self {
-        Self {
-            children: vec![vec![]],
-            drawable: None,
-        }
+        Self::default()
     }
 
-    /*
-    THIS WORKED
-      if self.children.len() > 0 {
-            for row in &self.children {
-                if row.len() > 0 {
-                    for child in row {
-                        // mount the child
-                        let mounted_child = child.mount_widget(self.cursor.get());
-                        // draw the child
-                        self.cursor.set(mounted_child.draw(ctx)?);
-                        // advance the cursor horizontally by padding and back to where we started vertically
-
-                        self.scroll_horizontal(VALUES.padding)?;
-                        self.scroll_vertical(-(self.cursor.get().y - self.top_left.y))?;
-                    }
-                    // advance the cursor back to the beginning of the next line down
-                    self.scroll_vertical(VALUES.padding)?;
-                    self.scroll_horizontal(-(self.cursor.get().x - VALUES.padding))?;
-                }
-            }
-        }
-        // draw self, if present
-        if let Some(d) = &self.drawable {
-            self.cursor.set(d.draw_at(self.cursor.get(), ctx)?);
-        }
-        Ok(self.cursor.get())
-    */
-
-    /// Draw this element and update the cursor
-    pub fn draw(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
+    /// Draw this element - pass true to actually render elements, false to just return the bottom right
+    pub fn draw(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
         let mut cursor = top_left;
+        let mut bottom_right = top_left;
         if !&self.children.is_empty() {
             for row in &self.children {
                 if !row.is_empty() {
@@ -333,18 +327,22 @@ impl MountedWidget {
                     // Draw each child
                     for child in row {
                         // Mount the child
-                        console::log_2(&"Mounting child at".into(), &format!("{}", cursor).into());
+                        let child_top_left = cursor;
                         let mounted_child = child.mount_widget();
                         // draw the child
                         let ctx = Rc::clone(&ctx);
-                        let end_point = mounted_child.draw(cursor, ctx)?;
+                        console::log_2(&"Drawing child at".into(), &format!("{}", cursor).into());
+                        cursor.set_to(mounted_child.draw(cursor, ctx)?)?;
                         //`// check if tallest
                         //`let offset = end_point.y - row_top_left.y;
                         //`if offset > vertical_offset {
                         //`    vertical_offset = offset;
                         //`}
                         // scroll to the next top_left
-                        cursor.horiz_offset(VALUES.padding + end_point.x)?;
+                        // store possible bottom right
+                        bottom_right = cursor;
+                        cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                        cursor.horiz_offset(VALUES.padding + (cursor.x - child_top_left.x))?;
                     }
                 }
                 // advance the cursor back to the beginning of the next line down
@@ -355,9 +353,15 @@ impl MountedWidget {
         }
         // draw self, if present
         if let Some(d) = &self.drawable {
-            cursor.set_to(d.draw_at(cursor, ctx)?)?;
+            // The drawable should start at the top left!!!
+            // a widgets drawable should encompass all child elements
+            // widget.drawable.get_region().origin() <= widget.get_get_region.origin() &&
+            // widget.drawable.get_region().bottom_right >= last_child.get_region().bottom_right()
+            cursor.set_to(d.draw_at(top_left, ctx)?)?;
+            bottom_right = cursor;
         }
-        Ok(cursor)
+        // Return bottom right
+        Ok(bottom_right)
     }
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
@@ -389,28 +393,27 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         // Return new cursor position, leaving at bottom right
         Ok(self.draw(top_left, ctx)?)
     }
-    fn get_region(&self, top_left: Point) -> Region {
-        // Add up all the regions.
+    fn get_region(&self, top_left: Point) -> Result<Region> {
+        // TODO but you have a shared reference problem
+        // The drawable should always encompass any contained widgets
         let mut ret = (top_left, 0.0, 0.0).into();
         let mut cursor = top_left;
         for row in &self.children {
             for child in row {
                 let child_top_left = cursor;
-                let r = child.get_region(child_top_left);
-                ret += r;
-                cursor.horiz_offset(VALUES.padding).expect("Illegal scroll");
+                let region = child.get_region(child_top_left)?;
+                ret += region;
+                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                cursor.horiz_offset(VALUES.padding + (cursor.x - child_top_left.x))?;
             }
+            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
         }
-        // add any drawable
-        if let Some(d) = &self.drawable {
-            let new_region = d.get_region(cursor);
-            ret += d.get_region(new_region.origin());
-        }
-        ret
+        Ok(ret)
     }
 }
 
@@ -430,19 +433,20 @@ impl Text {
 }
 
 impl Drawable for Text {
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> WindowResult<Point> {
+    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         ctx.begin_path();
         ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
         ctx.draw_path();
-        Ok(Drawable::get_region(self, top_left).bottom_right())
+        Ok(Drawable::get_region(self, top_left)?.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> Result<Region> {
         // TODO remove this get_context()?
-        let text_size = get_context()
-            .measure_text(&self.text)
-            .expect("Could not measure text");
-        (top_left, text_size.width(), f64::from(VALUES.font_size)).into()
+        let text_size = get_context().measure_text(&self.text);
+        match text_size {
+            Ok(s) => Ok((top_left, s.width(), f64::from(VALUES.font_size)).into()),
+            Err(e) => Err(WindowError::JsVal(e)),
+        }
     }
 }
 
@@ -452,7 +456,7 @@ impl Widget for Text {
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }
-    fn get_region(&self, top_left: Point) -> Region {
+    fn get_region(&self, top_left: Point) -> Result<Region> {
         Drawable::get_region(self, top_left)
     }
 }
