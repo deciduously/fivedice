@@ -153,7 +153,7 @@ impl WindowEngine {
             *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
                 // TODO feature-gate all console usage and the import
                 if let Err(e) = engine.borrow().draw() {
-                    console::log_2(&"Game error: ".into(), &format!("{}", e).into());
+                    console::error_2(&"Game error: ".into(), &format!("{}", e).into());
                 };
                 request_animation_frame(f.borrow().as_ref().unwrap());
             }) as Box<dyn FnMut()>));

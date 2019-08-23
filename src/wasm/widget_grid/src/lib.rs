@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
+use std::{borrow::Cow, cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use web_sys::console;
 /// DOM manipulation macros
@@ -478,11 +478,68 @@ impl Drawable for Text {
 impl Widget for Text {
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
+        // TODO see if the Cow helps with this?
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }
     fn get_region(&self, top_left: Point) -> Result<Region> {
         Drawable::get_region(self, top_left)
+    }
+}
+
+pub struct Button {
+    text: String,
+    // TODO callback
+}
+
+impl Button {
+    pub fn new(s: &str) -> Self {
+        Self { text: s.into() }
+    }
+}
+
+impl Drawable for Button {
+    fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
+        w.begin_path();
+        let outline = Drawable::get_region(self, top_left)?;
+        w.rect(outline);
+        w.text(
+            &self.text,
+            &VALUES.get_font_string(),
+            (
+                top_left.x + (VALUES.padding / 2.0),
+                top_left.y + (VALUES.padding * 2.0),
+            )
+                .into(),
+        )?;
+        w.draw_path();
+        Ok(outline.bottom_right())
+    }
+
+    fn get_region(&self, top_left: Point) -> Result<Region> {
+        // TODO there's another get_context() here
+        Ok((
+            top_left,
+            get_context()
+                .measure_text(&self.text)
+                .expect("Could not measure text width")
+                .width()
+                + VALUES.padding,
+            f64::from(VALUES.font_size) + VALUES.padding * 2.0,
+        )
+            .into())
+    }
+}
+
+impl Widget for Button {
+    fn get_region(&self, top_left: Point) -> Result<Region> {
+        Drawable::get_region(self, top_left)
+    }
+    fn mount_widget(&self) -> MountedWidget {
+        let mut ret = MountedWidget::new();
+        // Todo see if a Cow can avoid this problem
+        ret.set_drawable(Box::new(Button::new(&self.text)));
+        ret
     }
 }
 

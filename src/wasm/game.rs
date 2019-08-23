@@ -3,7 +3,7 @@
 use js_sys::Math::{floor, random};
 use std::str::FromStr;
 use widget_grid::{
-    window::WindowPtr, Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
+    window::WindowPtr, Button, Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
 };
 
 type WindowResult<T> = widget_grid::Result<T>;
@@ -188,8 +188,8 @@ impl Widget for Hand {
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        // TODO add Reroll Button
-        ret.push_new_row(Box::new(Text::new(&format!(
+        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text)));
+        ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls
         ))));
