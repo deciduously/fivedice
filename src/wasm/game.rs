@@ -1,9 +1,9 @@
 // game.rs contains the game logic
 
 use js_sys::Math::{floor, random};
-use std::{rc::Rc, str::FromStr};
+use std::rc::Rc;
 use widget_grid::{
-    window::WindowPtr, Button, Color, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
+    window::WindowPtr, Button, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
 };
 
 type WindowResult<T> = widget_grid::Result<T>;
@@ -96,50 +96,20 @@ impl Die {
     }
 }
 
-// TODO this will likely disappear and ust be bButtons added to the Widget impl
-impl Drawable for Die {
-    fn draw_at(&self, top_left: Point, w: WindowPtr) -> WindowResult<Point> {
-        // draw a rectangle
-        // if it's held, set the font color to red, otherwise black
-        w.begin_path();
-        let outline_region = Drawable::get_region(self, top_left, Rc::clone(&w))?;
-        w.rect(outline_region);
-        if self.held {
-            w.set_color(Color::from_str("red")?);
-        } else {
-            w.set_color(Color::from_str(VALUES.button_color)?);
-        }
-        // TODO draw the dot pattern
-        w.text(
-            &format!("{:?}", self.value),
-            &VALUES.get_font_string(),
-            (
-                top_left.x + (VALUES.padding / 2.0),
-                top_left.y + (VALUES.die_dimension / 2.0),
-            )
-                .into(),
-        )?;
-        w.draw_path();
-        Ok(outline_region.bottom_right())
-    }
-
-    fn get_region(&self, top_left: Point, _: WindowPtr) -> WindowResult<Region> {
-        Ok((top_left, VALUES.die_dimension, VALUES.die_dimension).into())
-    }
-}
-
 // TODO make it easy to impl Widget for items that are Drawable already
 // I smell a macro DSL?  Just one variadic macro should do it at first
 
 impl Widget for Die {
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
-        // TODO remove the text from the Drawable, use a Text node pushed to children
-        ret.set_drawable(Box::new(*self));
+        ret.set_drawable(Box::new(Button::new(
+            &format!("{:?}", self.value),
+            Some((VALUES.die_dimension, VALUES.die_dimension).into()),
+        )));
         ret
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        Drawable::get_region(self, top_left, w)
+        self.mount_widget().get_region(top_left, w)
     }
 }
 
@@ -188,7 +158,7 @@ impl Widget for Hand {
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text)));
+        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text, None)));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls
@@ -198,7 +168,7 @@ impl Widget for Hand {
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
         let mut ret = (top_left, 0.0, 0.0).into();
         for die in &self.dice {
-            ret += Drawable::get_region(die, top_left, Rc::clone(&w))?;
+            ret += die.mount_widget().get_region(top_left, Rc::clone(&w))?;
         }
         Ok(ret)
     }

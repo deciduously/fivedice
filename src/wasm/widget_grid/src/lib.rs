@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{borrow::Cow, cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
+use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-use web_sys::console;
+//use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -25,6 +25,8 @@ pub use window::*;
 // and pass it to a function, that builds the MountedWidget for you
 // it should also be able to auto-derive get_region(), that's a solved problem
 // First, Clickable done
+
+// TODO Builder Pattern all the things - widget, text, drawable
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
@@ -97,7 +99,9 @@ impl PartialOrd for Point {
         // Return which is closer to the origin
         if self.distance(Point::default()) < other.distance(Point::default()) {
             Some(Ordering::Less)
-        } else if self.x == other.x && self.y == other.y {
+        } else if (self.x - other.x).abs() < std::f64::EPSILON
+            && (self.y - other.y).abs() < std::f64::EPSILON
+        {
             Some(Ordering::Equal)
         } else {
             Some(Ordering::Greater)
@@ -478,14 +482,19 @@ impl Widget for Text {
     }
 }
 
+/// Generic button type.  Optionally takes a "bottom right" point as a width and height
 pub struct Button {
+    bottom_right: Option<Point>,
     text: String,
     // TODO callback
 }
 
 impl Button {
-    pub fn new(s: &str) -> Self {
-        Self { text: s.into() }
+    pub fn new(s: &str, bottom_right: Option<Point>) -> Self {
+        Self {
+            bottom_right,
+            text: s.into(),
+        }
     }
 }
 
@@ -507,17 +516,16 @@ impl Drawable for Button {
         Ok(outline.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point, _: WindowPtr) -> Result<Region> {
-        Ok((
-            top_left,
-            get_context()
-                .measure_text(&self.text)
-                .expect("Could not measure text width")
-                .width()
-                + VALUES.padding,
-            f64::from(VALUES.font_size) + VALUES.padding * 2.0,
-        )
-            .into())
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
+        match self.bottom_right {
+            Some(p) => Ok((top_left, p.x, p.y).into()),
+            None => Ok((
+                top_left,
+                w.text_width(&self.text)? + VALUES.padding,
+                f64::from(VALUES.font_size) + VALUES.padding * 2.0,
+            )
+                .into()),
+        }
     }
 }
 
@@ -528,7 +536,7 @@ impl Widget for Button {
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
         // Todo see if a Cow can avoid this problem
-        ret.set_drawable(Box::new(Button::new(&self.text)));
+        ret.set_drawable(Box::new(Button::new(&self.text, self.bottom_right)));
         ret
     }
 }

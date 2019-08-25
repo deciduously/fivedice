@@ -26,7 +26,7 @@ pub type WindowPtr = Rc<Box<dyn Window>>;
 
 /// Canvas implementation for WebSys
 pub struct WebSysCanvas {
-    ctx: Rc<CanvasRenderingContext2d>,
+    ctx: CanvasRenderingContext2d,
 }
 
 impl WebSysCanvas {
@@ -50,12 +50,9 @@ impl WebSysCanvas {
 
 impl Default for WebSysCanvas {
     fn default() -> Self {
-        Self {
-            ctx: Rc::new(get_context()),
-        }
+        Self { ctx: get_context() }
     }
 }
-
 impl Window for WebSysCanvas {
     fn blank(&self) {
         self.ctx.clear_rect(
