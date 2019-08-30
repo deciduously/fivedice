@@ -105,6 +105,7 @@ impl Widget for Die {
         ret.set_drawable(Box::new(Button::new(
             &format!("{:?}", self.value),
             Some((VALUES.die_dimension, VALUES.die_dimension).into()),
+            || {},
         )));
         ret
     }
@@ -158,7 +159,11 @@ impl Widget for Hand {
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text, None)));
+        ret.push_new_row(Box::new(Button::new(
+            VALUES.reroll_button_text,
+            None,
+            || {},
+        )));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls

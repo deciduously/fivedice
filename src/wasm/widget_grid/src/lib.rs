@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-//use web_sys::console;
+use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -15,7 +15,6 @@ mod ffi;
 pub mod window;
 
 pub use error::*;
-use ffi::get_context;
 pub use window::*;
 
 // TODO
@@ -24,24 +23,26 @@ pub use window::*;
 // You should be able to define a 2D vector of Box<dyn Widget>
 // and pass it to a function, that builds the MountedWidget for you
 // it should also be able to auto-derive get_region(), that's a solved problem
-// First, Clickable done
 
 // TODO Builder Pattern all the things - widget, text, drawable
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
+    /// Handle click if point falls in region
+    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<()>;
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point>;
+    fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point>;
     /// Get the Region of the bounding box of this drawable
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region>;
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
 }
 
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     /// Get the total of all regions of this widget
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region>;
+    // TODO i'd like to not have to have this in Widget
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
     /// Make this object into a Widget
     // TODO make a DSL for this - right now they're all:
     // {
@@ -50,14 +51,6 @@ pub trait Widget {
     //     ret
     // }
     fn mount_widget(&self) -> MountedWidget;
-}
-
-/// Trait representing Drawables that can be clicked
-pub trait Clickable: Drawable {
-    // Handle a click at the given coordinates
-    // No-op if coordinates outside of this boundary
-    // If inside, execute f
-    fn handle_click(&self, click: Point, c: dyn FnMut());
 }
 
 /// A single coordinate point on the canvas, top left is 0,0
@@ -149,6 +142,13 @@ impl Region {
     /// Return this region's bottom right
     pub fn bottom_right(&self) -> Point {
         (self.o.x + self.w, self.o.y + self.h).into()
+    }
+    /// Check if given point is within this region
+    pub fn contains(&self, p: Point) -> bool {
+        self.o.x <= p.x
+            && self.o.y <= p.y
+            && self.bottom_right().x >= p.x
+            && self.bottom_right().y >= p.y
     }
     /// Return this region's top right
     pub fn top_right(&self) -> Point {
@@ -412,6 +412,13 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
+    fn handle_click(&mut self, _: Point, click: Point, _: WindowPtr) -> Result<()> {
+        console::log_2(
+            &"Click at canvas coords ".into(),
+            &format!("{}", click).into(),
+        );
+        Ok(())
+    }
     fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         // Return new cursor position, leaving at bottom right
         Ok(self.draw(top_left, ctx)?)
@@ -453,17 +460,20 @@ impl Text {
 }
 
 impl Drawable for Text {
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
-        ctx.begin_path();
-        ctx.text(&self.text, &VALUES.get_font_string(), top_left)?;
-        ctx.draw_path();
-        Ok(Drawable::get_region(self, top_left, ctx)?.bottom_right())
+    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<()> {
+        Ok(())
+    }
+    fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
+        w.begin_path();
+        w.text(&self.text, &VALUES.get_font_string(), top_left)?;
+        w.draw_path();
+        Ok(Drawable::get_region(self, top_left, w)?.bottom_right())
     }
 
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
         Ok((
             top_left,
-            ctx.text_width(&self.text)?,
+            w.text_width(&self.text)?,
             f64::from(VALUES.font_size),
         )
             .into())
@@ -477,28 +487,35 @@ impl Widget for Text {
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
-        Drawable::get_region(self, top_left, ctx)
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
+        Drawable::get_region(self, top_left, w)
     }
 }
 
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
 pub struct Button {
     bottom_right: Option<Point>,
+    callback: Box<dyn FnMut()>,
     text: String,
-    // TODO callback
 }
 
 impl Button {
-    pub fn new(s: &str, bottom_right: Option<Point>) -> Self {
+    pub fn new<F: 'static + FnMut()>(s: &str, bottom_right: Option<Point>, f: F) -> Self {
         Self {
             bottom_right,
+            callback: Box::new(f),
             text: s.into(),
         }
     }
 }
 
 impl Drawable for Button {
+    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<()> {
+        if Drawable::get_region(self, top_left, w)?.contains(click) {
+            (self.callback)();
+        }
+        Ok(())
+    }
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         let outline = Drawable::get_region(self, top_left, Rc::clone(&w))?;
@@ -536,7 +553,11 @@ impl Widget for Button {
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
         // Todo see if a Cow can avoid this problem
-        ret.set_drawable(Box::new(Button::new(&self.text, self.bottom_right)));
+        ret.set_drawable(Box::new(Button::new(
+            &self.text,
+            self.bottom_right,
+            move || {},
+        )));
         ret
     }
 }
