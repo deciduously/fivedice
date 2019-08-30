@@ -7,7 +7,7 @@ mod error;
 // Game logic
 mod game;
 
-use crate::game::Game;
+use crate::game::{FiveDiceMessage, Game};
 use widget_grid::window::{WebSysCanvas, WindowEngine};
 
 /// Entry point for the module
@@ -23,7 +23,7 @@ pub fn start() {
     let game = Box::new(Game::new());
 
     // Instantiate engine
-    let engine = WindowEngine::new(renderable_context, game);
+    let engine: WindowEngine<FiveDiceMessage> = WindowEngine::new(renderable_context, game);
 
     // Run game
     engine.start();

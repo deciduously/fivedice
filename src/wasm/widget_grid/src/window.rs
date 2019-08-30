@@ -1,8 +1,5 @@
 use super::{ffi::*, *};
-use std::{
-    collections::VecDeque,
-    sync::{Arc, RwLock},
-};
+use std::{cell::RefCell, collections::VecDeque};
 use web_sys::{console, CanvasRenderingContext2d, MouseEvent};
 
 /// Trait representing a canvas to be drawn to.  For now, only supports CanvasRenderingContext2d
@@ -100,26 +97,48 @@ impl Window for WebSysCanvas {
 }
 
 // Static holder for clicks
-lazy_static! {
-    static ref CLICKS: Arc<RwLock<VecDeque<Point>>> = Arc::new(RwLock::new(VecDeque::new()));
+thread_local! {
+    static CLICKS: RefCell<VecDeque<Point>> = RefCell::new(VecDeque::new());
 }
 
 /// Top-level canvas engine object
 /// // TODO maybe a good spot to store values?
-pub struct WindowEngine {
+pub struct WindowEngine<T: 'static> {
     window: WindowPtr,
-    element: MountedWidget,
+    element: Box<dyn Widget<T>>,
 }
 
-impl WindowEngine {
-    pub fn new(w: Box<dyn Window>, e: Box<dyn Widget>) -> Self {
+impl<T> WindowEngine<T> {
+    pub fn new(w: Box<dyn Window>, element: Box<dyn Widget<T>>) -> Self {
         console_error_panic_hook::set_once();
         let window = Rc::new(w);
-        let mounted_widget = e.mount_widget();
-        Self {
-            window,
-            element: mounted_widget,
-        }
+        // Add click listener
+        // translate from page coords to canvas coords
+        // shamelessly lifted from the RustWasm book but translated to Rust
+        // https://rustwasm.github.io/book/game-of-life/interactivity.html
+        let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
+            let canvas = get_canvas();
+            let bounding_rect = canvas.get_bounding_client_rect();
+            let scale_x = f64::from(canvas.width()) / bounding_rect.width();
+            let scale_y = f64::from(canvas.height()) / bounding_rect.height();
+
+            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
+            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
+
+            let click: Point = (canvas_x, canvas_y).into();
+            console::log_2(
+                &"JS callback click at ".into(),
+                &format!("{}", click).into(),
+            );
+            CLICKS.with(|cs| cs.borrow_mut().push_back(click));
+        }) as Box<dyn FnMut(_)>);
+
+        // TODO maybe the struct should hold the CanvasElement?  Avoid this get_canvas()?
+        get_canvas()
+            .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
+            .expect("Should register event listener");
+        callback.forget();
+        Self { window, element }
     }
 
     /// Draw elements
@@ -128,13 +147,14 @@ impl WindowEngine {
         // handle any received clicks
         for click in clicks {
             self.element
-                .handle_click(Point::default(), click, Rc::clone(&self.window))?
+                .mount_widget()
+                .click(Point::default(), click, Rc::clone(&self.window))?;
         }
         // clear canvas
         self.window.blank();
         // Draw element
         let w = Rc::clone(&self.window);
-        if let Err(e) = self.element.draw(Point::default(), w) {
+        if let Err(e) = self.element.mount_widget().draw(Point::default(), w) {
             console::error_2(&"Draw".into(), &format!("{}", e).into());
         };
         Ok(())
@@ -143,56 +163,29 @@ impl WindowEngine {
     /// Start engine
     pub fn start(self) {
         let engine = Rc::new(RefCell::new(self));
-        {
-            // Add click listener
-            // translate from page coords to canvas coords
-            // shamelessly lifted from the RustWasm book but translated to Rust
-            // https://rustwasm.github.io/book/game-of-life/interactivity.html
-            let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
-                let canvas = get_canvas();
-                let bounding_rect = canvas.get_bounding_client_rect();
-                let scale_x = f64::from(canvas.width()) / bounding_rect.width();
-                let scale_y = f64::from(canvas.height()) / bounding_rect.height();
-
-                let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
-                let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
-
-                let click: Point = (canvas_x, canvas_y).into();
-                console::log_2(
-                    &"JS callback click at ".into(),
-                    &format!("{}", click).into(),
-                );
-                CLICKS.write().unwrap().push_back(click);
-            }) as Box<dyn FnMut(_)>);
-
-            // TODO maybe the struct should hold the CanvasElement?
-            get_canvas()
-                .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
-                .expect("Should register event listener");
-            callback.forget();
-        }
-
-        {
-            // Run the game loop
-            // All iterations inside the loop can use the Rc.  Starts out empty
-            let f = Rc::new(RefCell::new(None));
-            let g = f.clone();
-            *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                // pass any clicks out of the queue into the engine
-                let mut rcvd_clicks: Vec<Point> = Vec::new();
-                for _ in CLICKS.read().unwrap().iter() {
-                    match CLICKS.write().unwrap().pop_front() {
+        // Run the game loop
+        // Initiate animation_frame() callback
+        // All iterations inside the loop can use the Rc.  Starts out empty
+        let f = Rc::new(RefCell::new(None));
+        let g = f.clone();
+        *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+            // pass any clicks out of the queue into the engine
+            let mut rcvd_clicks: Vec<Point> = Vec::new();
+            CLICKS.with(|cs| {
+                let len = cs.borrow().len();
+                for _ in 0..len {
+                    match cs.borrow_mut().pop_front() {
                         Some(c) => rcvd_clicks.push(c),
                         None => break,
                     }
                 }
-                if let Err(e) = engine.borrow_mut().draw(rcvd_clicks) {
-                    console::error_2(&"Draw error".into(), &format!("{}", e).into());
-                }
-                request_animation_frame(f.borrow().as_ref().unwrap());
-            }) as Box<dyn FnMut()>));
-            // Kick off the loop
-            request_animation_frame(g.borrow().as_ref().unwrap());
-        }
+            });
+            if let Err(e) = engine.borrow_mut().draw(rcvd_clicks) {
+                console::error_2(&"Draw error".into(), &format!("{}", e).into());
+            }
+            request_animation_frame(f.borrow().as_ref().unwrap());
+        }) as Box<dyn FnMut()>));
+        // Kick off the loop
+        request_animation_frame(g.borrow().as_ref().unwrap());
     }
 }

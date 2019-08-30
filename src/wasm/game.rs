@@ -3,7 +3,7 @@
 use js_sys::Math::{floor, random};
 use std::rc::Rc;
 use widget_grid::{
-    window::WindowPtr, Button, Drawable, Message, MountedWidget, Point, Region, Text, Widget,
+    window::WindowPtr, Button, Callback, Drawable, MountedWidget, Point, Region, Text, Widget,
     VALUES,
 };
 
@@ -56,18 +56,23 @@ pub enum RollResult {
 /// A single Die, can be held or not
 #[derive(Debug, Clone, Copy)]
 pub struct Die {
+    id: u8,
     value: RollResult,
     held: bool,
 }
 
 impl Die {
-    fn new(value: RollResult) -> Self {
-        Self { value, held: false }
+    fn new(id: u8, value: RollResult) -> Self {
+        Self {
+            id,
+            value,
+            held: false,
+        }
     }
 
     /// Get a random die
-    fn get_random() -> Self {
-        Self::new(Self::get_random_result())
+    fn get_random(id: u8) -> Self {
+        Self::new(id, Self::get_random_result())
     }
 
     /// Get a random result
@@ -100,18 +105,29 @@ impl Die {
 // TODO make it easy to impl Widget for items that are Drawable already
 // I smell a macro DSL?  Just one variadic macro should do it at first
 
-impl Widget for Die {
-    fn mount_widget(&self) -> MountedWidget {
+impl<T: 'static> Widget<T> for Die {
+    fn mount_widget(&self) -> MountedWidget<T> {
         let mut ret = MountedWidget::new();
-        ret.set_drawable(Box::new(Button::new(
+        let button = Button::new(
             &format!("{:?}", self.value),
             Some((VALUES.die_dimension, VALUES.die_dimension).into()),
-            || None,
-        )));
+            None,
+        );
+        ret.push_current_row(Box::new(button));
         ret
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        self.mount_widget().get_region(top_left, w)
+        let mw: MountedWidget<FiveDiceMessage> = self.mount_widget();
+        mw.get_region(top_left, w)
+    }
+    fn handle_click(
+        &mut self,
+        _: Point,
+        _: Point,
+        _: WindowPtr,
+        _: Option<Callback<T>>,
+    ) -> WindowResult<Option<T>> {
+        Ok(None)
     }
 }
 
@@ -143,28 +159,24 @@ impl Default for Hand {
         Self {
             // HAND_SIZE is hard-coded to 5 - this doesn't work otherwise
             dice: [
-                Die::get_random(),
-                Die::get_random(),
-                Die::get_random(),
-                Die::get_random(),
-                Die::get_random(),
+                Die::get_random(0),
+                Die::get_random(1),
+                Die::get_random(2),
+                Die::get_random(3),
+                Die::get_random(4),
             ],
             remaining_rolls: 3,
         }
     }
 }
 
-impl Widget for Hand {
-    fn mount_widget(&self) -> MountedWidget {
+impl<T: 'static> Widget<T> for Hand {
+    fn mount_widget(&self) -> MountedWidget<T> {
         let mut ret = MountedWidget::new();
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        ret.push_new_row(Box::new(Button::new(
-            VALUES.reroll_button_text,
-            None,
-            || Some(Box::new(FiveDiceMessage::RollDice)),
-        )));
+        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text, None, None)));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls
@@ -174,9 +186,30 @@ impl Widget for Hand {
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
         let mut ret = (top_left, 0.0, 0.0).into();
         for die in &self.dice {
-            ret += die.mount_widget().get_region(top_left, Rc::clone(&w))?;
+            let mw: MountedWidget<FiveDiceMessage> = die.mount_widget();
+            ret += mw.get_region(top_left, Rc::clone(&w))?;
         }
         Ok(ret)
+    }
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+        callback: Option<Callback<T>>,
+    ) -> WindowResult<Option<T>> {
+        for die in &self.dice {
+            let mut mw: MountedWidget<T> = die.mount_widget();
+            if mw.get_region(top_left, Rc::clone(&w))?.contains(click) {
+                match mw.click(top_left, click, Rc::clone(&w))? {
+                    Some(m) => return Ok(Some(m)),
+                    None => {}
+                }
+            } else {
+                continue;
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -202,13 +235,11 @@ impl Player {
 
 // All the various ways the game can be interacted with
 #[derive(Debug, Clone, Copy)]
-enum FiveDiceMessage {
+pub enum FiveDiceMessage {
     HoldDie(usize),
     RollDice,
     StartOver,
 }
-
-impl Message for FiveDiceMessage {}
 
 /// The Game object
 #[derive(Debug)]
@@ -222,24 +253,6 @@ impl Game {
         Self {
             player: Player::new(),
         }
-    }
-
-    // Detect if the given coordinates fall in a given region
-    fn detect_region(
-        &mut self,
-        x: f64,
-        y: f64,
-        top_left_x: f64,
-        top_left_y: f64,
-        bottom_right_x: f64,
-        bottom_right_y: f64,
-    ) -> bool {
-        x >= top_left_x && x <= bottom_right_x && y >= top_left_y && y <= bottom_right_y
-    }
-
-    // Return all the current dice in play
-    pub fn get_hand(&self) -> Hand {
-        self.player.current_hand
     }
 
     // Toggle one die on the player
@@ -271,13 +284,23 @@ impl Game {
     }
 }
 
-impl Widget for Game {
-    fn mount_widget(&self) -> MountedWidget {
+impl<T: 'static> Widget<T> for Game {
+    fn mount_widget(&self) -> MountedWidget<T> {
         let mut ret = MountedWidget::new();
         ret.push_current_row(self.player.get_hand());
         ret
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        self.player.get_hand().get_region(top_left, w)
+        let mw: MountedWidget<FiveDiceMessage> = self.player.get_hand().mount_widget();
+        mw.get_region(top_left, w)
+    }
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+        callback: Option<Callback<T>>,
+    ) -> WindowResult<Option<T>> {
+        Ok(None)
     }
 }

@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
+use std::{cmp::Ordering, convert::AsRef, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 //use web_sys::console;
 /// DOM manipulation macros
@@ -37,31 +37,60 @@ pub trait Drawable {
 
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
-pub trait Widget {
-    /// Handle click if point falls in region
+pub trait Widget<T> {
+    /// Just a bool signalling if this item is clickable
+    /// Get the total of all regions of this widget
+    // TODO i'd like to not have to have this in Widget
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
+    /// Handle a click in this region
     fn handle_click(
         &mut self,
         top_left: Point,
         click: Point,
         w: WindowPtr,
-    ) -> Option<Vec<Box<dyn Message>>>;
-    /// Get the total of all regions of this widget
-    // TODO i'd like to not have to have this in Widget
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
-    /// Make this object into a Widget
+        callback: Option<Callback<T>>,
+    ) -> Result<Option<T>>;
+    /// Make this object into a Widget.  Takes an optional callback
     // TODO make a DSL for this - right now they're all:
     // {
     //     let ret p MountedWidget::new(top_left);
     //     //push some elements
     //     ret
     // }
-    fn mount_widget(&self) -> MountedWidget;
+    fn mount_widget(&self) -> MountedWidget<T>;
 }
 
-/// Empty trait represeting Message enums to be used in reducers TODO THIS IS WHERE YOU ARE
-pub trait Message {
-    /// A reducer function that accepts a message and returns a result, having mutated state
-    fn reducer(&mut self)
+/// Callback type
+/// /// thanks to https://github.com/yewstack/yew/blob/master/src/callback.rs
+pub struct Callback<T> {
+    f: Rc<dyn Fn() -> T>,
+}
+
+impl<T> Callback<T> {
+    /// Call this callback
+    pub fn call(&self) -> T {
+        (self.f)()
+    }
+}
+
+impl<T> Clone for Callback<T> {
+    fn clone(&self) -> Self {
+        Self {
+            f: Rc::clone(&self.f),
+        }
+    }
+}
+
+impl<T> PartialEq for Callback<T> {
+    fn eq(&self, other: &Callback<T>) -> bool {
+        Rc::ptr_eq(&self.f, &other.f)
+    }
+}
+
+impl<T, F: Fn() -> T + 'static> From<F> for Callback<T> {
+    fn from(func: F) -> Self {
+        Self { f: Rc::new(func) }
+    }
 }
 
 /// A single coordinate point on the canvas, top left is 0,0
@@ -195,12 +224,12 @@ impl AddAssign for Region {
     /// use widget_grid::Region;
     ///
     /// # fn main() {
+    ///     // origin in region, larger
     ///     let mut orig: Region = (0.0, 0.0, 10.0, 10.0).into();
     ///     let other1: Region = (4.0, 6.0, 20.0, 8.0).into();
     ///     orig += other1;
     ///     assert_eq!(orig, (0.0, 0.0, 24.0, 14.0).into());
-    /// # }
-    /// # fn five_dice() {
+    ///     // five dice
     ///     let dice = vec![
     ///        (10.0, 0.0, 50.0, 50.0).into(),
     ///        (70.0, 0.0, 50.0, 50.0).into(),
@@ -214,18 +243,16 @@ impl AddAssign for Region {
     ///    }
     ///    let expected = (10.0, 0.0, 300.0, 50.0).into();
     ///    assert_eq!(total, expected);
-    /// # }
-    /// # fn add_self_to_self() {
-    ///     let mut r1: Region = (0.0, 0.0, 10.0, 10.0).into();
-    ///     let r2 = (0.0, 0.0, 10.0, 10.0).into();
-    ///     r1 += r2;
-    ///     assert_eq!(r1, r2);
-    /// # }
-    /// # fn add_smaller_than() {
-    ///     let r1: Region = (0.0, 0.0, 10.0, 10.0).into();
-    ///     let mut r2 = r1;
-    ///     r2 += (2.0, 2.0, 2.0, 2.0).into();
-    ///     assert_eq!(r1, r2);
+    ///    // self to self
+    ///    let mut r1: Region = (0.0, 0.0, 10.0, 10.0).into();
+    ///    let r2 = (0.0, 0.0, 10.0, 10.0).into();
+    ///    r1 += r2;
+    ///    assert_eq!(r1, r2);
+    ///    // orig encompasses operand
+    ///    let r1: Region = (0.0, 0.0, 10.0, 10.0).into();
+    ///    let mut r2 = r1;
+    ///    r2 += (2.0, 2.0, 2.0, 2.0).into();
+    ///    assert_eq!(r1, r2);
     /// # }
     /// ```
     fn add_assign(&mut self, other: Region) {
@@ -323,12 +350,12 @@ impl FromStr for Color {
 }
 
 /// A container struct for a widget
-pub struct MountedWidget {
-    children: Vec<Vec<Box<dyn Widget>>>,
+pub struct MountedWidget<T> {
+    children: Vec<Vec<Box<dyn Widget<T>>>>,
     drawable: Option<Box<dyn Drawable>>,
 }
 
-impl MountedWidget {
+impl<T> MountedWidget<T> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -384,38 +411,15 @@ impl MountedWidget {
         // Return bottom right
         Ok(bottom_right)
     }
-    /// Handle a click
-    fn handle_click(
-        &mut self,
-        top_left: Point,
-        click: Point,
-        w: WindowPtr,
-    ) -> Result<Option<Vec<Box<dyn Message>>>> {
-        // iterate through widgets, handle all their clicks, handle drawable's click
-        let mut cursor = top_left;
-        let mut ret = vec![];
-        for row in &self.children {
-            for child in row {
-                let child_top_left = cursor;
-                ret.append(&mut child.handle_click(child_top_left, click, w).unwrap());
-
-                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                cursor.horiz_offset(VALUES.padding)?;
-            }
-            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
-            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
-        }
-        Ok(Some(ret))
-    }
     /// Add a new element to the current row
-    pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
+    pub fn push_current_row(&mut self, d: Box<dyn Widget<T>>) {
         let num_rows = self.children.len();
         let idx = if num_rows > 0 { num_rows - 1 } else { 0 };
         self.children[idx].push(d);
     }
 
     /// Add a new element to a new row
-    pub fn push_new_row(&mut self, d: Box<dyn Widget>) {
+    pub fn push_new_row(&mut self, d: Box<dyn Widget<T>>) {
         self.children.push(vec![d]);
     }
 
@@ -423,9 +427,34 @@ impl MountedWidget {
     pub fn set_drawable(&mut self, d: Box<dyn Drawable>) {
         self.drawable = Some(d);
     }
+
+    /// Handle a click
+    pub fn click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
+        // iterate through widgets, handle all their clicks, handle drawable's click
+        let mut cursor = top_left;
+        for (rowi, _) in self.children.iter().enumerate() {
+            for (childi, _) in self.children[rowi].iter().enumerate() {
+                let child_top_left = cursor;
+                match self.children[rowi][childi].mount_widget().click(
+                    child_top_left,
+                    click,
+                    Rc::clone(&w),
+                )? {
+                    Some(m) => return Ok(Some(m)), // if a hit returns, that's it - pass it on up
+                    None => {}
+                }
+
+                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                cursor.horiz_offset(VALUES.padding)?;
+            }
+            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+        }
+        Ok(None)
+    }
 }
 
-impl Default for MountedWidget {
+impl<T> Default for MountedWidget<T> {
     fn default() -> Self {
         Self {
             children: vec![vec![]],
@@ -434,7 +463,7 @@ impl Default for MountedWidget {
     }
 }
 
-impl fmt::Display for MountedWidget {
+impl<T> fmt::Display for MountedWidget<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -445,7 +474,7 @@ impl fmt::Display for MountedWidget {
     }
 }
 
-impl Drawable for MountedWidget {
+impl<T> Drawable for MountedWidget<T> {
     fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         // Return new cursor position, leaving at bottom right
         Ok(self.draw(top_left, ctx)?)
@@ -504,15 +533,21 @@ impl Drawable for Text {
     }
 }
 
-impl Widget for Text {
-    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Option<Vec<Box<dyn Message>>> {
-        None
-    }
-    fn mount_widget(&self) -> MountedWidget {
+impl<T> Widget<T> for Text {
+    fn mount_widget(&self) -> MountedWidget<T> {
         let mut ret = MountedWidget::new();
         // TODO see if the Cow helps with this?
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
+    }
+    fn handle_click(
+        &mut self,
+        _: Point,
+        _: Point,
+        _: WindowPtr,
+        _: Option<Callback<T>>,
+    ) -> Result<Option<T>> {
+        Ok(None)
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
         Drawable::get_region(self, top_left, w)
@@ -520,23 +555,28 @@ impl Widget for Text {
 }
 
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
-pub struct Button {
+/// Takes a callback to call upon click and a value to pass to the callback
+#[derive(Clone)]
+pub struct Button<T> {
     bottom_right: Option<Point>,
-    result_message: Box<dyn Message>,
+    callback: Option<Callback<T>>,
     text: String,
 }
 
-impl Button {
-    pub fn new(s: &str, bottom_right: Option<Point>, msg: Box<dyn Message>) -> Self {
+impl<T> Button<T>
+where
+    T: 'static,
+{
+    pub fn new(s: &str, bottom_right: Option<Point>, callback: Option<Callback<T>>) -> Self {
         Self {
             bottom_right,
-            result_message: msg,
+            callback,
             text: s.into(),
         }
     }
 }
 
-impl Drawable for Button {
+impl<T> Drawable for Button<T> {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         let outline = Drawable::get_region(self, top_left, Rc::clone(&w))?;
@@ -567,38 +607,34 @@ impl Drawable for Button {
     }
 }
 
-impl Widget for Button {
+impl<T: 'static> Widget<T> for Button<T> {
+    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
+        Drawable::get_region(self, top_left, ctx)
+    }
     fn handle_click(
         &mut self,
         top_left: Point,
         click: Point,
         w: WindowPtr,
-    ) -> Option<Vec<Box<dyn Message>>> {
-        if Drawable::get_region(self, top_left, w)
-            .expect("Should validate window region")
-            .contains(click)
-        {
-            Some(vec![self.result_message])
+        callback: Option<Callback<T>>,
+    ) -> Result<Option<T>> {
+        // for now, Hand is handling the click.
+        if Drawable::get_region(self, top_left, w)?.contains(click) {
+            match &self.callback {
+                Some(f) => Ok(Some(f.call())),
+                None => Ok(None),
+            }
         } else {
-            None
+            Ok(None)
         }
     }
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
-        Drawable::get_region(self, top_left, ctx)
-    }
-    fn mount_widget(&self) -> MountedWidget {
+    fn mount_widget(&self) -> MountedWidget<T> {
+        // It's jut a drawable/clickable thing - but you need widget for Clickable
         let mut ret = MountedWidget::new();
-        //ret.set_drawable(Box::new(Button::new(
-        //    &self.text,
-        //    self.bottom_right,
-        //    self.callback,
-        //)));
+        ret.set_drawable(Box::new(*(*self).clone()));
         ret
     }
 }
-
-/// A clickable widget
-// pub struct Button {}
 
 // Values configuration
 // TODO this is very tightly coupled
