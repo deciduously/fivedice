@@ -123,7 +123,13 @@ impl WindowEngine {
     }
 
     /// Draw elements
-    pub fn draw(&self) {
+    /// Takes a list of clicks to resolve first
+    pub fn draw(&mut self, clicks: Vec<Point>) -> Result<()> {
+        // handle any received clicks
+        for click in clicks {
+            self.element
+                .handle_click(Point::default(), click, Rc::clone(&self.window))?
+        }
         // clear canvas
         self.window.blank();
         // Draw element
@@ -131,13 +137,14 @@ impl WindowEngine {
         if let Err(e) = self.element.draw(Point::default(), w) {
             console::error_2(&"Draw".into(), &format!("{}", e).into());
         };
+        Ok(())
     }
 
     /// Start engine
     pub fn start(self) {
         let engine = Rc::new(RefCell::new(self));
         {
-            // Add click listener -= maybe this should move to WebSysCanvas and pass in the engine
+            // Add click listener
             // translate from page coords to canvas coords
             // shamelessly lifted from the RustWasm book but translated to Rust
             // https://rustwasm.github.io/book/game-of-life/interactivity.html
@@ -155,7 +162,6 @@ impl WindowEngine {
                     &"JS callback click at ".into(),
                     &format!("{}", click).into(),
                 );
-                // Maybe you do have to implement the click stuff literally right here?
                 CLICKS.write().unwrap().push_back(click);
             }) as Box<dyn FnMut(_)>);
 
@@ -171,13 +177,18 @@ impl WindowEngine {
             // All iterations inside the loop can use the Rc.  Starts out empty
             let f = Rc::new(RefCell::new(None));
             let g = f.clone();
-            //let ctx = Rc::clone(&engine.borrow().window);
             *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                // handle any clicks
-                for _click in CLICKS.read().unwrap().iter() {
-                    // TODO this is breaking everything still how do we do this
+                // pass any clicks out of the queue into the engine
+                let mut rcvd_clicks: Vec<Point> = Vec::new();
+                for _ in CLICKS.read().unwrap().iter() {
+                    match CLICKS.write().unwrap().pop_front() {
+                        Some(c) => rcvd_clicks.push(c),
+                        None => break,
+                    }
                 }
-                engine.borrow().draw();
+                if let Err(e) = engine.borrow_mut().draw(rcvd_clicks) {
+                    console::error_2(&"Draw error".into(), &format!("{}", e).into());
+                }
                 request_animation_frame(f.borrow().as_ref().unwrap());
             }) as Box<dyn FnMut()>));
             // Kick off the loop

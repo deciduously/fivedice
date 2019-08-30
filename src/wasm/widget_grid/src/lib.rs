@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use std::{cell::RefCell, cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-use web_sys::console;
+//use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -28,8 +28,6 @@ pub use window::*;
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
-    /// Handle click if point falls in region
-    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<()>;
     /// Draw this game element with the given top left corner
     /// Only ever called once mounted.  Returns the bottom right corner of what was painted
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point>;
@@ -40,6 +38,13 @@ pub trait Drawable {
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
+    /// Handle click if point falls in region
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> Option<Vec<Box<dyn Message>>>;
     /// Get the total of all regions of this widget
     // TODO i'd like to not have to have this in Widget
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
@@ -51,6 +56,12 @@ pub trait Widget {
     //     ret
     // }
     fn mount_widget(&self) -> MountedWidget;
+}
+
+/// Empty trait represeting Message enums to be used in reducers TODO THIS IS WHERE YOU ARE
+pub trait Message {
+    /// A reducer function that accepts a message and returns a result, having mutated state
+    fn reducer(&mut self)
 }
 
 /// A single coordinate point on the canvas, top left is 0,0
@@ -373,6 +384,29 @@ impl MountedWidget {
         // Return bottom right
         Ok(bottom_right)
     }
+    /// Handle a click
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> Result<Option<Vec<Box<dyn Message>>>> {
+        // iterate through widgets, handle all their clicks, handle drawable's click
+        let mut cursor = top_left;
+        let mut ret = vec![];
+        for row in &self.children {
+            for child in row {
+                let child_top_left = cursor;
+                ret.append(&mut child.handle_click(child_top_left, click, w).unwrap());
+
+                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                cursor.horiz_offset(VALUES.padding)?;
+            }
+            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+        }
+        Ok(Some(ret))
+    }
     /// Add a new element to the current row
     pub fn push_current_row(&mut self, d: Box<dyn Widget>) {
         let num_rows = self.children.len();
@@ -412,19 +446,12 @@ impl fmt::Display for MountedWidget {
 }
 
 impl Drawable for MountedWidget {
-    fn handle_click(&mut self, _: Point, click: Point, _: WindowPtr) -> Result<()> {
-        console::log_2(
-            &"Click at canvas coords ".into(),
-            &format!("{}", click).into(),
-        );
-        Ok(())
-    }
     fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
         // Return new cursor position, leaving at bottom right
         Ok(self.draw(top_left, ctx)?)
     }
     fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
-        // TODO this is the same as drawing but...doesn't draw
+        // TODO this is the same as drawing but...doesn't draw, and i'm gonna use it again for handle-click!
         let mut cursor = top_left;
         let mut bottom_right = top_left;
         for row in &self.children {
@@ -460,9 +487,6 @@ impl Text {
 }
 
 impl Drawable for Text {
-    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<()> {
-        Ok(())
-    }
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         w.text(&self.text, &VALUES.get_font_string(), top_left)?;
@@ -481,6 +505,9 @@ impl Drawable for Text {
 }
 
 impl Widget for Text {
+    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Option<Vec<Box<dyn Message>>> {
+        None
+    }
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
         // TODO see if the Cow helps with this?
@@ -495,27 +522,21 @@ impl Widget for Text {
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
 pub struct Button {
     bottom_right: Option<Point>,
-    callback: Box<dyn FnMut()>,
+    result_message: Box<dyn Message>,
     text: String,
 }
 
 impl Button {
-    pub fn new<F: 'static + FnMut()>(s: &str, bottom_right: Option<Point>, f: F) -> Self {
+    pub fn new(s: &str, bottom_right: Option<Point>, msg: Box<dyn Message>) -> Self {
         Self {
             bottom_right,
-            callback: Box::new(f),
+            result_message: msg,
             text: s.into(),
         }
     }
 }
 
 impl Drawable for Button {
-    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<()> {
-        if Drawable::get_region(self, top_left, w)?.contains(click) {
-            (self.callback)();
-        }
-        Ok(())
-    }
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         let outline = Drawable::get_region(self, top_left, Rc::clone(&w))?;
@@ -547,17 +568,31 @@ impl Drawable for Button {
 }
 
 impl Widget for Button {
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> Option<Vec<Box<dyn Message>>> {
+        if Drawable::get_region(self, top_left, w)
+            .expect("Should validate window region")
+            .contains(click)
+        {
+            Some(vec![self.result_message])
+        } else {
+            None
+        }
+    }
     fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
         Drawable::get_region(self, top_left, ctx)
     }
     fn mount_widget(&self) -> MountedWidget {
         let mut ret = MountedWidget::new();
-        // Todo see if a Cow can avoid this problem
-        ret.set_drawable(Box::new(Button::new(
-            &self.text,
-            self.bottom_right,
-            move || {},
-        )));
+        //ret.set_drawable(Box::new(Button::new(
+        //    &self.text,
+        //    self.bottom_right,
+        //    self.callback,
+        //)));
         ret
     }
 }

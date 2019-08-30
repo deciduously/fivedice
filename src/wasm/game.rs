@@ -3,7 +3,8 @@
 use js_sys::Math::{floor, random};
 use std::rc::Rc;
 use widget_grid::{
-    window::WindowPtr, Button, Drawable, MountedWidget, Point, Region, Text, Widget, VALUES,
+    window::WindowPtr, Button, Drawable, Message, MountedWidget, Point, Region, Text, Widget,
+    VALUES,
 };
 
 type WindowResult<T> = widget_grid::Result<T>;
@@ -105,7 +106,7 @@ impl Widget for Die {
         ret.set_drawable(Box::new(Button::new(
             &format!("{:?}", self.value),
             Some((VALUES.die_dimension, VALUES.die_dimension).into()),
-            || {},
+            || None,
         )));
         ret
     }
@@ -162,7 +163,7 @@ impl Widget for Hand {
         ret.push_new_row(Box::new(Button::new(
             VALUES.reroll_button_text,
             None,
-            || {},
+            || Some(Box::new(FiveDiceMessage::RollDice)),
         )));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
@@ -200,11 +201,14 @@ impl Player {
 }
 
 // All the various ways the game can be interacted with
-enum Message {
+#[derive(Debug, Clone, Copy)]
+enum FiveDiceMessage {
     HoldDie(usize),
     RollDice,
     StartOver,
 }
+
+impl Message for FiveDiceMessage {}
 
 /// The Game object
 #[derive(Debug)]
@@ -232,67 +236,7 @@ impl Game {
     ) -> bool {
         x >= top_left_x && x <= bottom_right_x && y >= top_left_y && y <= bottom_right_y
     }
-    /*
-        /// Handle a click at canvasX, canvasY
-        pub fn handle_click(
-            &mut self,
-            click_x: f64,
-            click_y: f64,
-            ctx: &web_sys::CanvasRenderingContext2d,
-        ) {
-            use Message::*;
-            // Will be moved to Clickable, bot for now...
-            let values = self.context.values;
-            // Check if it hit a die
-            // grab relevant dimensions from the values struct
-            let dice_dim = values.die_dimension;
-            let dice_start_x = values.dice_origin().0;
-            let dice_start_y = values.dice_origin().1;
-            let dice_padding = dice_dim + values.padding;
-            // check if hit given is in each die's boundary
-            for i in 0..HAND_SIZE {
-                let die_start_x = dice_start_x + (dice_padding * i as f64);
-                let die_end_x = dice_start_x + dice_dim + (dice_padding * i as f64);
-                let die_end_y = dice_start_y + dice_dim;
-                if self.detect_region(
-                    click_x,
-                    click_y,
-                    die_start_x,
-                    dice_start_y,
-                    die_end_x,
-                    die_end_y,
-                ) {
-                    self.reducer(HoldDie(i));
-                }
-            }
 
-            // check if we hit the Roll button
-            let (top_left, bottom_right) = values.reroll_button_corners(&ctx);
-            if self.detect_region(
-                click_x,
-                click_y,
-                top_left.0,
-                top_left.1,
-                bottom_right.0,
-                bottom_right.1,
-            ) {
-                self.reducer(RollDice);
-            }
-
-            // check if we hit the Start Over button
-            let (top_left, bottom_right) = values.start_over_button_corners(&ctx);
-            if self.detect_region(
-                click_x,
-                click_y,
-                top_left.0,
-                top_left.1,
-                bottom_right.0,
-                bottom_right.1,
-            ) {
-                self.reducer(StartOver);
-            }
-        }
-    */
     // Return all the current dice in play
     pub fn get_hand(&self) -> Hand {
         self.player.current_hand
@@ -307,8 +251,8 @@ impl Game {
 
     /// Handle all incoming messages
     /// TODO send an outgoing result?  Maybe use the memory tape for streaming events back
-    fn reducer(&mut self, msg: Message) {
-        use Message::*;
+    fn reducer(&mut self, msg: FiveDiceMessage) {
+        use FiveDiceMessage::*;
         match msg {
             HoldDie(idx) => self.hold_die(idx),
             RollDice => self.roll_dice(),
