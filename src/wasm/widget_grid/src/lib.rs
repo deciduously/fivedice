@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 use std::{cmp::Ordering, convert::AsRef, fmt, ops::AddAssign, rc::Rc, str::FromStr};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-//use web_sys::console;
+// use web_sys::console;
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -43,13 +43,7 @@ pub trait Widget<T> {
     // TODO i'd like to not have to have this in Widget
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
     /// Handle a click in this region
-    fn handle_click(
-        &mut self,
-        top_left: Point,
-        click: Point,
-        w: WindowPtr,
-        callback: Option<Callback<T>>,
-    ) -> Result<Option<T>>;
+    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>>;
     /// Make this object into a Widget.  Takes an optional callback
     // TODO make a DSL for this - right now they're all:
     // {
@@ -102,7 +96,7 @@ pub struct Point {
 
 impl Point {
     /// Set to point, specifically on canvas
-    fn set_to(&mut self, p: Point) -> Result<()> {
+    pub fn set_to(&mut self, p: Point) -> Result<()> {
         if !VALUES.fits_canvas(p) {
             Err(WindowError::OutOfBounds(*self, p))
         } else {
@@ -112,12 +106,12 @@ impl Point {
         }
     }
     /// Horizontal offset
-    fn horiz_offset(&mut self, offset: f64) -> Result<()> {
+    pub fn horiz_offset(&mut self, offset: f64) -> Result<()> {
         self.set_to((self.x + offset, self.y).into())?;
         Ok(())
     }
     /// Vertical offset
-    fn vert_offset(&mut self, offset: f64) -> Result<()> {
+    pub fn vert_offset(&mut self, offset: f64) -> Result<()> {
         self.set_to((self.x, self.y + offset).into())?;
         Ok(())
     }
@@ -361,43 +355,39 @@ impl<T> MountedWidget<T> {
     }
 
     /// Draw this element - pass true to actually render elements, false to just return the bottom right
-    pub fn draw(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
+    pub fn draw(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
         let mut cursor = top_left;
         let mut bottom_right = top_left;
         let mut vertical_offset = 0.0;
-        if !&self.children.is_empty() {
-            for row in &self.children {
-                let row_top_left = cursor;
-                if !row.is_empty() {
-                    // Draw each child
-                    for child in row {
-                        // Mount the child
-                        let child_top_left = cursor;
-                        let mounted_child = child.mount_widget();
-                        // draw the child
-                        cursor.set_to(mounted_child.draw(child_top_left, Rc::clone(&ctx))?)?;
-                        // check if tallest
-                        let offset = cursor.y - row_top_left.y;
-                        if offset > vertical_offset {
-                            vertical_offset = offset;
-                        }
-                        // store possible bottom right
-                        let child_bottom_right = mounted_child
-                            .get_region(child_top_left, Rc::clone(&ctx))?
-                            .bottom_right();
-                        if child_bottom_right > bottom_right {
-                            bottom_right = child_bottom_right;
-                        }
-                        cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                        cursor.horiz_offset(VALUES.padding)?;
-                    }
+        for row in &self.children {
+            let row_top_left = cursor;
+            // Draw each child
+            for child in row {
+                // Mount the child
+                let child_top_left = cursor;
+                let mounted_child = child.mount_widget();
+                // draw the child
+                cursor.set_to(mounted_child.draw(child_top_left, Rc::clone(&w))?)?;
+                // check if tallest
+                let offset = cursor.y - row_top_left.y;
+                if offset > vertical_offset {
+                    vertical_offset = offset;
                 }
-                // advance the cursor back to the beginning of the next line down
-                cursor.vert_offset((VALUES.padding * 2.0) + vertical_offset)?;
-                cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+                // store possible bottom right
+                let child_bottom_right = mounted_child
+                    .get_region(child_top_left, Rc::clone(&w))?
+                    .bottom_right();
+                if child_bottom_right > bottom_right {
+                    bottom_right = child_bottom_right;
+                }
+                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                cursor.horiz_offset(VALUES.padding)?;
             }
+            // advance the cursor back to the beginning of the next line down
+            cursor.vert_offset((VALUES.padding * 2.0) + vertical_offset)?;
+            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
         }
         // draw self, if present
         if let Some(d) = &self.drawable {
@@ -405,7 +395,7 @@ impl<T> MountedWidget<T> {
             // a widgets drawable should encompass all child elements
             // widget.drawable.get_region().origin() <= widget.get_get_region.origin() &&
             // widget.drawable.get_region().bottom_right >= last_child.get_region().bottom_right()
-            cursor.set_to(d.draw_at(top_left, ctx)?)?;
+            cursor.set_to(d.draw_at(top_left, w)?)?;
             bottom_right = cursor;
         }
         // Return bottom right
@@ -426,6 +416,29 @@ impl<T> MountedWidget<T> {
     /// Set drawable for this widget - overrides any currently set
     pub fn set_drawable(&mut self, d: Box<dyn Drawable>) {
         self.drawable = Some(d);
+    }
+
+    /// Get the entire region encompassing this MountedWidget
+    pub fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
+        // TODO this is the same as drawing but...doesn't draw, and i'm gonna use it again for handle-click!
+        if let Some(d) = &self.drawable {
+            d.get_region(top_left, w)
+        } else {
+            let mut cursor = top_left;
+            let mut bottom_right = top_left;
+            for row in &self.children {
+                for child in row {
+                    let child_top_left = cursor;
+                    let region = child.get_region(child_top_left, Rc::clone(&w))?;
+                    if region.bottom_right() > bottom_right {
+                        bottom_right = region.bottom_right();
+                    }
+                    cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                    cursor.horiz_offset(VALUES.padding)?;
+                }
+            }
+            Ok((top_left, bottom_right).into())
+        }
     }
 
     /// Handle a click
@@ -474,32 +487,6 @@ impl<T> fmt::Display for MountedWidget<T> {
     }
 }
 
-impl<T> Drawable for MountedWidget<T> {
-    fn draw_at(&self, top_left: Point, ctx: WindowPtr) -> Result<Point> {
-        // Return new cursor position, leaving at bottom right
-        Ok(self.draw(top_left, ctx)?)
-    }
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
-        // TODO this is the same as drawing but...doesn't draw, and i'm gonna use it again for handle-click!
-        let mut cursor = top_left;
-        let mut bottom_right = top_left;
-        for row in &self.children {
-            for child in row {
-                let child_top_left = cursor;
-                let region = child.get_region(child_top_left, Rc::clone(&ctx))?;
-                if region.bottom_right() > bottom_right {
-                    bottom_right = region.bottom_right();
-                }
-                cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                cursor.horiz_offset(VALUES.padding)?;
-            }
-            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
-            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
-        }
-        Ok((top_left, bottom_right).into())
-    }
-}
-
 //
 // Reusable Drawables
 //
@@ -540,13 +527,7 @@ impl<T> Widget<T> for Text {
         ret.set_drawable(Box::new(Text::new(&self.text)));
         ret
     }
-    fn handle_click(
-        &mut self,
-        _: Point,
-        _: Point,
-        _: WindowPtr,
-        _: Option<Callback<T>>,
-    ) -> Result<Option<T>> {
+    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<Option<T>> {
         Ok(None)
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
@@ -611,14 +592,7 @@ impl<T: 'static> Widget<T> for Button<T> {
     fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
         Drawable::get_region(self, top_left, ctx)
     }
-    fn handle_click(
-        &mut self,
-        top_left: Point,
-        click: Point,
-        w: WindowPtr,
-        callback: Option<Callback<T>>,
-    ) -> Result<Option<T>> {
-        // for now, Hand is handling the click.
+    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
         if Drawable::get_region(self, top_left, w)?.contains(click) {
             match &self.callback {
                 Some(f) => Ok(Some(f.call())),
@@ -629,9 +603,10 @@ impl<T: 'static> Widget<T> for Button<T> {
         }
     }
     fn mount_widget(&self) -> MountedWidget<T> {
-        // It's jut a drawable/clickable thing - but you need widget for Clickable
         let mut ret = MountedWidget::new();
-        ret.set_drawable(Box::new(*(*self).clone()));
+        // TODO why can't you use the derived Clone??
+        let self_clone = Button::new(&self.text, self.bottom_right, self.callback.clone());
+        ret.set_drawable(Box::new(self_clone));
         ret
     }
 }

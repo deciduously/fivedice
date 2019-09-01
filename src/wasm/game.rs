@@ -2,10 +2,7 @@
 
 use js_sys::Math::{floor, random};
 use std::rc::Rc;
-use widget_grid::{
-    window::WindowPtr, Button, Callback, Drawable, MountedWidget, Point, Region, Text, Widget,
-    VALUES,
-};
+use widget_grid::{window::WindowPtr, Button, MountedWidget, Point, Region, Text, Widget, VALUES};
 
 type WindowResult<T> = widget_grid::Result<T>;
 
@@ -120,13 +117,7 @@ impl<T: 'static> Widget<T> for Die {
         let mw: MountedWidget<FiveDiceMessage> = self.mount_widget();
         mw.get_region(top_left, w)
     }
-    fn handle_click(
-        &mut self,
-        _: Point,
-        _: Point,
-        _: WindowPtr,
-        _: Option<Callback<T>>,
-    ) -> WindowResult<Option<T>> {
+    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> WindowResult<Option<T>> {
         Ok(None)
     }
 }
@@ -185,9 +176,14 @@ impl<T: 'static> Widget<T> for Hand {
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
         let mut ret = (top_left, 0.0, 0.0).into();
+        let mut cursor = top_left;
         for die in &self.dice {
+            // You've got to use a cursor
             let mw: MountedWidget<FiveDiceMessage> = die.mount_widget();
-            ret += mw.get_region(top_left, Rc::clone(&w))?;
+            let region = mw.get_region(cursor, Rc::clone(&w))?;
+            ret += region;
+            cursor = region.top_right();
+            cursor.horiz_offset(VALUES.padding)?;
         }
         Ok(ret)
     }
@@ -196,7 +192,6 @@ impl<T: 'static> Widget<T> for Hand {
         top_left: Point,
         click: Point,
         w: WindowPtr,
-        callback: Option<Callback<T>>,
     ) -> WindowResult<Option<T>> {
         for die in &self.dice {
             let mut mw: MountedWidget<T> = die.mount_widget();
@@ -299,7 +294,6 @@ impl<T: 'static> Widget<T> for Game {
         top_left: Point,
         click: Point,
         w: WindowPtr,
-        callback: Option<Callback<T>>,
     ) -> WindowResult<Option<T>> {
         Ok(None)
     }
