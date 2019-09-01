@@ -2,7 +2,10 @@
 
 use js_sys::Math::{floor, random};
 use std::rc::Rc;
-use widget_grid::{window::WindowPtr, Button, MountedWidget, Point, Region, Text, Widget, VALUES};
+use web_sys::console;
+use widget_grid::{
+    window::WindowPtr, Button, Callback, MountedWidget, Point, Region, Text, Widget, VALUES,
+};
 
 type WindowResult<T> = widget_grid::Result<T>;
 
@@ -102,8 +105,9 @@ impl Die {
 // TODO make it easy to impl Widget for items that are Drawable already
 // I smell a macro DSL?  Just one variadic macro should do it at first
 
-impl<T: 'static> Widget<T> for Die {
-    fn mount_widget(&self) -> MountedWidget<T> {
+impl Widget for Die {
+    type MSG = FiveDiceMessage;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
         let button = Button::new(
             &format!("{:?}", self.value),
@@ -117,7 +121,12 @@ impl<T: 'static> Widget<T> for Die {
         let mw: MountedWidget<FiveDiceMessage> = self.mount_widget();
         mw.get_region(top_left, w)
     }
-    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> WindowResult<Option<T>> {
+    fn handle_click(
+        &mut self,
+        _: Point,
+        _: Point,
+        _: WindowPtr,
+    ) -> WindowResult<Option<Self::MSG>> {
         Ok(None)
     }
 }
@@ -161,13 +170,20 @@ impl Default for Hand {
     }
 }
 
-impl<T: 'static> Widget<T> for Hand {
-    fn mount_widget(&self) -> MountedWidget<T> {
+impl Widget for Hand {
+    type MSG = FiveDiceMessage;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
-        ret.push_new_row(Box::new(Button::new(VALUES.reroll_button_text, None, None)));
+        ret.push_new_row(Box::new(Button::new(
+            VALUES.reroll_button_text,
+            None,
+            Some(Callback::from(|| -> Self::MSG {
+                FiveDiceMessage::RollDice
+            })),
+        )));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls
@@ -192,19 +208,14 @@ impl<T: 'static> Widget<T> for Hand {
         top_left: Point,
         click: Point,
         w: WindowPtr,
-    ) -> WindowResult<Option<T>> {
-        for die in &self.dice {
-            let mut mw: MountedWidget<T> = die.mount_widget();
-            if mw.get_region(top_left, Rc::clone(&w))?.contains(click) {
-                match mw.click(top_left, click, Rc::clone(&w))? {
-                    Some(m) => return Ok(Some(m)),
-                    None => {}
-                }
-            } else {
-                continue;
-            }
+    ) -> WindowResult<Option<Self::MSG>> {
+        let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
+        let msg = mw.click(top_left, click, Rc::clone(&w))?;
+        if msg.is_some() {
+            return Ok(msg);
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
 }
 
@@ -279,10 +290,18 @@ impl Game {
     }
 }
 
-impl<T: 'static> Widget<T> for Game {
-    fn mount_widget(&self) -> MountedWidget<T> {
+impl Widget for Game {
+    type MSG = FiveDiceMessage;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
-        ret.push_current_row(self.player.get_hand());
+        ret.push_current_row(Box::new(Button::new(
+            "Start Over",
+            None,
+            Some(Callback::from(|| -> FiveDiceMessage {
+                FiveDiceMessage::StartOver
+            })),
+        ))); // StartOver msg
+        ret.push_new_row(self.player.get_hand());
         ret
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
@@ -294,7 +313,20 @@ impl<T: 'static> Widget<T> for Game {
         top_left: Point,
         click: Point,
         w: WindowPtr,
-    ) -> WindowResult<Option<T>> {
+    ) -> WindowResult<Option<Self::MSG>> {
+        // Mount the widget and collect any message for this click point
+        let mut mw: MountedWidget<FiveDiceMessage> = self.mount_widget();
+        let msg = mw.click(top_left, click, w)?;
+        console::log_2(&"Click result in Game".into(), &format!("{:?}", msg).into());
+        if let Some(m) = msg {
+            // Handle the click
+            console::log_2(
+                &"Passing message to reducer:".into(),
+                &format!("{:?}", m).into(),
+            );
+            self.reducer(m);
+        }
+        // Nothing to pass up to the caller
         Ok(None)
     }
 }

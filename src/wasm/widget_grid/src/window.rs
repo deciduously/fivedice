@@ -105,11 +105,11 @@ thread_local! {
 /// // TODO maybe a good spot to store values?
 pub struct WindowEngine<T: 'static> {
     window: WindowPtr,
-    element: Box<dyn Widget<T>>,
+    element: Box<dyn Widget<MSG = T>>,
 }
 
 impl<T> WindowEngine<T> {
-    pub fn new(w: Box<dyn Window>, element: Box<dyn Widget<T>>) -> Self {
+    pub fn new(w: Box<dyn Window>, element: Box<dyn Widget<MSG = T>>) -> Self {
         console_error_panic_hook::set_once();
         let window = Rc::new(w);
         // Add click listener
@@ -147,8 +147,7 @@ impl<T> WindowEngine<T> {
         // handle any received clicks
         for click in clicks {
             self.element
-                .mount_widget()
-                .click(Point::default(), click, Rc::clone(&self.window))?;
+                .handle_click(Point::default(), click, Rc::clone(&self.window))?;
         }
         // clear canvas
         self.window.blank();

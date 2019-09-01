@@ -1,9 +1,12 @@
 #[macro_use]
 extern crate lazy_static;
 
-use std::{cmp::Ordering, convert::AsRef, fmt, ops::AddAssign, rc::Rc, str::FromStr};
+use std::{
+    cmp::Ordering, convert::AsRef, fmt, marker::PhantomData, ops::AddAssign, rc::Rc, str::FromStr,
+};
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
-// use web_sys::console;
+use web_sys::console;
+
 /// DOM manipulation macros
 #[macro_use]
 mod dom;
@@ -37,13 +40,19 @@ pub trait Drawable {
 
 /// Trait representing sets of 0 or more Drawables
 /// Each one can have variable number rows and elements in each row
-pub trait Widget<T> {
+pub trait Widget {
+    type MSG;
     /// Just a bool signalling if this item is clickable
     /// Get the total of all regions of this widget
     // TODO i'd like to not have to have this in Widget
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
     /// Handle a click in this region
-    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>>;
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> Result<Option<Self::MSG>>;
     /// Make this object into a Widget.  Takes an optional callback
     // TODO make a DSL for this - right now they're all:
     // {
@@ -51,11 +60,11 @@ pub trait Widget<T> {
     //     //push some elements
     //     ret
     // }
-    fn mount_widget(&self) -> MountedWidget<T>;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG>;
 }
 
 /// Callback type
-/// /// thanks to https://github.com/yewstack/yew/blob/master/src/callback.rs
+// thanks to https://github.com/yewstack/yew/blob/master/src/callback.rs with some differences
 pub struct Callback<T> {
     f: Rc<dyn Fn() -> T>,
 }
@@ -345,7 +354,7 @@ impl FromStr for Color {
 
 /// A container struct for a widget
 pub struct MountedWidget<T> {
-    children: Vec<Vec<Box<dyn Widget<T>>>>,
+    children: Vec<Vec<Box<dyn Widget<MSG = T>>>>,
     drawable: Option<Box<dyn Drawable>>,
 }
 
@@ -402,14 +411,14 @@ impl<T> MountedWidget<T> {
         Ok(bottom_right)
     }
     /// Add a new element to the current row
-    pub fn push_current_row(&mut self, d: Box<dyn Widget<T>>) {
+    pub fn push_current_row(&mut self, d: Box<dyn Widget<MSG = T>>) {
         let num_rows = self.children.len();
         let idx = if num_rows > 0 { num_rows - 1 } else { 0 };
         self.children[idx].push(d);
     }
 
     /// Add a new element to a new row
-    pub fn push_new_row(&mut self, d: Box<dyn Widget<T>>) {
+    pub fn push_new_row(&mut self, d: Box<dyn Widget<MSG = T>>) {
         self.children.push(vec![d]);
     }
 
@@ -445,15 +454,15 @@ impl<T> MountedWidget<T> {
     pub fn click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
         // iterate through widgets, handle all their clicks, handle drawable's click
         let mut cursor = top_left;
-        for (rowi, _) in self.children.iter().enumerate() {
-            for (childi, _) in self.children[rowi].iter().enumerate() {
+        for row in self.children.iter_mut() {
+            for child in row.iter_mut() {
                 let child_top_left = cursor;
-                match self.children[rowi][childi].mount_widget().click(
-                    child_top_left,
-                    click,
-                    Rc::clone(&w),
-                )? {
-                    Some(m) => return Ok(Some(m)), // if a hit returns, that's it - pass it on up
+
+                match child.handle_click(child_top_left, click, Rc::clone(&w))? {
+                    Some(m) => {
+                        console::log_1(&"Passing message up MW::click".into());
+                        return Ok(Some(m)); // if a hit returns, that's it - pass it on up
+                    }
                     None => {}
                 }
 
@@ -492,17 +501,21 @@ impl<T> fmt::Display for MountedWidget<T> {
 //
 
 /// A widget that just draws some text
-pub struct Text {
+pub struct Text<T> {
+    phantom: PhantomData<T>,
     text: String,
 }
 
-impl Text {
+impl<T> Text<T> {
     pub fn new(s: &str) -> Self {
-        Self { text: s.into() }
+        Self {
+            phantom: PhantomData,
+            text: s.into(),
+        }
     }
 }
 
-impl Drawable for Text {
+impl<T> Drawable for Text<T> {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         w.text(&self.text, &VALUES.get_font_string(), top_left)?;
@@ -520,14 +533,15 @@ impl Drawable for Text {
     }
 }
 
-impl<T> Widget<T> for Text {
-    fn mount_widget(&self) -> MountedWidget<T> {
+impl<T: 'static> Widget for Text<T> {
+    type MSG = T;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
-        // TODO see if the Cow helps with this?
-        ret.set_drawable(Box::new(Text::new(&self.text)));
+        let t: Text<Self::MSG> = Text::new(&self.text);
+        ret.set_drawable(Box::new(t));
         ret
     }
-    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<Option<T>> {
+    fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<Option<Self::MSG>> {
         Ok(None)
     }
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
@@ -588,11 +602,17 @@ impl<T> Drawable for Button<T> {
     }
 }
 
-impl<T: 'static> Widget<T> for Button<T> {
+impl<T: 'static> Widget for Button<T> {
+    type MSG = T;
     fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
         Drawable::get_region(self, top_left, ctx)
     }
-    fn handle_click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> Result<Option<Self::MSG>> {
         if Drawable::get_region(self, top_left, w)?.contains(click) {
             match &self.callback {
                 Some(f) => Ok(Some(f.call())),
@@ -602,7 +622,7 @@ impl<T: 'static> Widget<T> for Button<T> {
             Ok(None)
         }
     }
-    fn mount_widget(&self) -> MountedWidget<T> {
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
         // TODO why can't you use the derived Clone??
         let self_clone = Button::new(&self.text, self.bottom_right, self.callback.clone());

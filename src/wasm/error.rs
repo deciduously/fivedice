@@ -7,19 +7,20 @@ use widget_grid::WindowError;
 #[derive(Debug)]
 pub enum FiveDiceError {
     Window(WindowError),
-    Interop(JsValue),
 }
 
 impl fmt::Display for FiveDiceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Window(e) => write!(f, "{}", e),
-            Self::Interop(js) => write!(f, "{:#?}", js),
         }
     }
 }
 
 impl std::error::Error for FiveDiceError {}
+
+// Unused!
+//pub type Result<T> = std::result::Result<T, FiveDiceError>;
 
 impl Into<JsValue> for FiveDiceError {
     fn into(self) -> JsValue {
