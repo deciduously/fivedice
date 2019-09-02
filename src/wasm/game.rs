@@ -121,7 +121,6 @@ impl Widget for Die {
             Some((VALUES.die_dimension, VALUES.die_dimension).into()),
             die_color,
             Some(Callback::from(move || -> FiveDiceMessage {
-                console::log_2(&"Hold Die".into(), &format!("{}", id).into());
                 FiveDiceMessage::HoldDie(id)
             })),
         );

@@ -463,6 +463,9 @@ impl<T> MountedWidget<T> {
                 if let Some(m) = child.handle_click(child_top_left, click, Rc::clone(&w))? {
                     return Ok(Some(m)); // if a hit returns, that's it - pass it on up
                 }
+                // advance cursor to next child
+                // set to bottom right first
+                cursor.set_to(child.get_region(child_top_left, Rc::clone(&w))?.bottom_right())?;
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 cursor.horiz_offset(VALUES.padding)?;
             }

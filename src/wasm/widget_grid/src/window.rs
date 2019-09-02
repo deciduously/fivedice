@@ -129,10 +129,10 @@ impl<T> WindowEngine<T> {
             let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
 
             let click: Point = (canvas_x, canvas_y).into();
-            console::log_2(
-                &"JS callback click at ".into(),
-                &format!("{}", click).into(),
-            );
+            //console::log_2(
+            //    &"JS callback click at ".into(),
+            //    &format!("{}", click).into(),
+            //);
             CLICKS.with(|cs| cs.borrow_mut().push_back(click));
         }) as Box<dyn FnMut(_)>);
 
