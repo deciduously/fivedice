@@ -2,9 +2,13 @@
 
 use js_sys::Math::{floor, random};
 use std::{rc::Rc, str::FromStr};
-use web_sys::console;
+//use web_sys::console;
 use widget_grid::{
-    window::WindowPtr, Button, Callback, Color, MountedWidget, Point, Region, Text, Widget, VALUES,
+    traits::{MountedWidget, Widget},
+    types::{Callback, Color, Point, Region},
+    widgets::{Button, Text},
+    window::WindowPtr,
+    VALUES,
 };
 
 type WindowResult<T> = widget_grid::Result<T>;
@@ -174,7 +178,7 @@ impl Hand {
 impl Default for Hand {
     fn default() -> Self {
         Self {
-            // HAND_SIZE is hard-coded to 5 - TODO do this in a loop
+            // HAND_SIZE is hard-coded to 5 - TODO do this in a loop?
             dice: [
                 Die::get_random(0),
                 Die::get_random(1),

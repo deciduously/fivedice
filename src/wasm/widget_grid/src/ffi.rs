@@ -1,4 +1,4 @@
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{CanvasRenderingContext2d, Document, HtmlCanvasElement, HtmlElement};
 /// Grab the body
 pub fn get_body() -> HtmlElement {

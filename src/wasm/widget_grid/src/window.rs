@@ -1,4 +1,8 @@
-use super::{ffi::*, *};
+use crate::{
+    ffi::{get_body, get_canvas, get_context, get_document, request_animation_frame},
+    traits::Widget,
+    {AsRef, Closure, Color, JsCast, Point, Rc, Region, Result, WindowError, VALUES},
+};
 use std::{cell::RefCell, collections::VecDeque};
 use web_sys::{console, CanvasRenderingContext2d, MouseEvent};
 
