@@ -7,7 +7,7 @@ pub trait Window {
     /// Blank the window
     fn blank(&self);
     /// Draw a rectangle
-    fn rect(&self, region: Region);
+    fn rect(&self, region: Region, color: Color);
     /// Begin/rest a path - should we let the engine handle this??
     /// its more efficient to batch calls, so for now I'm letting the user decide when to do that
     // TODO Eventually a DSL will let batches happen
@@ -63,7 +63,8 @@ impl Window for WebSysCanvas {
             VALUES.canvas_size.1.into(),
         )
     }
-    fn rect(&self, region: Region) {
+    fn rect(&self, region: Region, color: Color) {
+        self.set_color(color);
         self.ctx.rect(
             region.origin().x,
             region.origin().y,
@@ -97,6 +98,9 @@ impl Window for WebSysCanvas {
 }
 
 // Static holder for clicks
+// TODO - probably doesn't need to be a queue
+// The odds of a user registering multiple distinct clicks in a frame are next to none
+// Especially becuse it just gets drained to a Vec for processing anyway
 thread_local! {
     static CLICKS: RefCell<VecDeque<Point>> = RefCell::new(VecDeque::new());
 }
@@ -114,8 +118,7 @@ impl<T> WindowEngine<T> {
         let window = Rc::new(w);
         // Add click listener
         // translate from page coords to canvas coords
-        // shamelessly lifted from the RustWasm book but translated to Rust
-        // https://rustwasm.github.io/book/game-of-life/interactivity.html
+        // https://rustwasm.github.io/book/game-of-life/interactivity.html but in Rust, not JS
         let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
             let canvas = get_canvas();
             let bounding_rect = canvas.get_bounding_client_rect();

@@ -347,6 +347,8 @@ impl FromStr for Color {
         match s {
             "black" => Ok(Color::new(0, 0, 0)),
             "red" => Ok(Color::new(255, 0, 0)),
+            "blue" => Ok(Color::new(0, 0, 255)),
+            "green" => Ok(Color::new(0, 255, 0)),
             _ => unimplemented!(),
         }
     }
@@ -401,7 +403,7 @@ impl<T> MountedWidget<T> {
         // draw self, if present
         if let Some(d) = &self.drawable {
             // The drawable should start at the top left!!!
-            // a widgets drawable should encompass all child elements
+            // a widget's drawable should encompass all child elements
             // widget.drawable.get_region().origin() <= widget.get_get_region.origin() &&
             // widget.drawable.get_region().bottom_right >= last_child.get_region().bottom_right()
             cursor.set_to(d.draw_at(top_left, w)?)?;
@@ -450,22 +452,17 @@ impl<T> MountedWidget<T> {
         }
     }
 
-    /// Handle a click
+    /// Handle a click - broken??? - 0 die is correct, 1 die hits die 4, rest dead. seems like cursor increments too much?
     pub fn click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
-        // iterate through widgets, handle all their clicks, handle drawable's click
+        // iterate through widgets, handle all their clicks, h/andle drawable's click
         let mut cursor = top_left;
         for row in self.children.iter_mut() {
             for child in row.iter_mut() {
                 let child_top_left = cursor;
-
-                match child.handle_click(child_top_left, click, Rc::clone(&w))? {
-                    Some(m) => {
-                        console::log_1(&"Passing message up MW::click".into());
-                        return Ok(Some(m)); // if a hit returns, that's it - pass it on up
-                    }
-                    None => {}
+                // if you change this to child.mount_widget().click() it all breaks (and probably shouldn't)
+                if let Some(m) = child.handle_click(child_top_left, click, Rc::clone(&w))? {
+                    return Ok(Some(m)); // if a hit returns, that's it - pass it on up
                 }
-
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 cursor.horiz_offset(VALUES.padding)?;
             }
@@ -509,7 +506,7 @@ pub struct Text<T> {
 impl<T> Text<T> {
     pub fn new(s: &str) -> Self {
         Self {
-            phantom: PhantomData,
+            phantom: PhantomData, // TODO - really?  No better solution?
             text: s.into(),
         }
     }
@@ -534,7 +531,7 @@ impl<T> Drawable for Text<T> {
 }
 
 impl<T: 'static> Widget for Text<T> {
-    type MSG = T;
+    type MSG = T; // TODO this is why you need the PhantomData
     fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
         let t: Text<Self::MSG> = Text::new(&self.text);
@@ -555,6 +552,7 @@ impl<T: 'static> Widget for Text<T> {
 pub struct Button<T> {
     bottom_right: Option<Point>,
     callback: Option<Callback<T>>,
+    color: Color,
     text: String,
 }
 
@@ -562,10 +560,16 @@ impl<T> Button<T>
 where
     T: 'static,
 {
-    pub fn new(s: &str, bottom_right: Option<Point>, callback: Option<Callback<T>>) -> Self {
+    pub fn new(
+        s: &str,
+        bottom_right: Option<Point>,
+        color: Color,
+        callback: Option<Callback<T>>,
+    ) -> Self {
         Self {
             bottom_right,
             callback,
+            color,
             text: s.into(),
         }
     }
@@ -575,7 +579,7 @@ impl<T> Drawable for Button<T> {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
         let outline = Drawable::get_region(self, top_left, Rc::clone(&w))?;
-        w.rect(outline);
+        w.rect(outline, self.color);
         w.text(
             &self.text,
             &VALUES.get_font_string(),
@@ -604,8 +608,8 @@ impl<T> Drawable for Button<T> {
 
 impl<T: 'static> Widget for Button<T> {
     type MSG = T;
-    fn get_region(&self, top_left: Point, ctx: WindowPtr) -> Result<Region> {
-        Drawable::get_region(self, top_left, ctx)
+    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
+        Drawable::get_region(self, top_left, w)
     }
     fn handle_click(
         &mut self,
@@ -625,7 +629,12 @@ impl<T: 'static> Widget for Button<T> {
     fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
         // TODO why can't you use the derived Clone??
-        let self_clone = Button::new(&self.text, self.bottom_right, self.callback.clone());
+        let self_clone = Button::new(
+            &self.text,
+            self.bottom_right,
+            self.color,
+            self.callback.clone(),
+        );
         ret.set_drawable(Box::new(self_clone));
         ret
     }
