@@ -21,7 +21,6 @@ pub trait Drawable {
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     type MSG;
-    /// Just a bool signalling if this item is clickable
     /// Get the total of all regions of this widget
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
     /// Handle a click in this region

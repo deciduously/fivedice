@@ -60,6 +60,7 @@ impl<T: 'static> Widget for Text<T> {
 
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
 /// Takes a callback to call upon click and a value to pass to the callback
+// TODO buttons seem to only accent clicks under the text, not around the whole rectangle
 #[derive(Clone)]
 pub struct Button<T> {
     bottom_right: Option<Point>,

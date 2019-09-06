@@ -109,8 +109,9 @@ thread_local! {
     static CLICKS: RefCell<VecDeque<Point>> = RefCell::new(VecDeque::new());
 }
 
+//trait ValuesTrait {}
+
 /// Top-level canvas engine object
-/// // TODO maybe a good spot to store values?
 pub struct WindowEngine<T: 'static> {
     window: WindowPtr,
     element: Box<dyn Widget<MSG = T>>,

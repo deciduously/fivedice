@@ -16,7 +16,7 @@ pub mod ffi;
 pub mod traits;
 /// Various type definitions
 pub mod types;
-/// Resuable widgets
+/// Reusable widgets
 pub mod widgets;
 /// Window and WebSysCanvas
 pub mod window;

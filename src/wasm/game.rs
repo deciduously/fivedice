@@ -143,12 +143,7 @@ impl Widget for Die {
     ) -> WindowResult<Option<Self::MSG>> {
         // TODO this is identical to hand, no need to write every time
         let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
-        let msg = mw.click(top_left, click, w)?;
-        if msg.is_some() {
-            Ok(msg)
-        } else {
-            Ok(None)
-        }
+        Ok(mw.click(top_left, click, w)?)
     }
 }
 
