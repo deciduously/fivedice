@@ -4,9 +4,11 @@ A Rust/WebAssembly implementation of Yahtzee. WIP.
 
 ## Dependencies
 
-- Node
+- NPM
 - Rust
 - wasm-pack
+- GNU `make`
+- `bash`
 
 ## Usage
 
