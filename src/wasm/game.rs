@@ -120,14 +120,12 @@ impl Widget for Die {
         } else {
             Color::from_str("black").unwrap()
         };
-        let button = Button::new(
-            &format!("{:?}", self.value),
-            Some((VALUES.die_dimension, VALUES.die_dimension).into()),
-            die_color,
-            Some(Callback::from(move || -> FiveDiceMessage {
-                FiveDiceMessage::HoldDie(id)
-            })),
-        );
+        let mut button = Button::new(&format!("{:?}", self.value));
+        button.add_border_color(die_color);
+        button.set_onclick(Callback::from(move || -> FiveDiceMessage {
+            FiveDiceMessage::HoldDie(id)
+        }));
+        button.set_size(VALUES.die_dimension, VALUES.die_dimension);
         ret.push_current_row(Box::new(button));
         ret
     }
@@ -194,14 +192,11 @@ impl Widget for Hand {
             ret.push_current_row(Box::new(*die));
         }
         // TODO the reroll button only picks up clicks on the bottom half of the button
-        ret.push_new_row(Box::new(Button::new(
-            VALUES.reroll_button_text,
-            None,
-            Color::from_str("black").unwrap(),
-            Some(Callback::from(|| -> Self::MSG {
-                FiveDiceMessage::RollDice
-            })),
-        )));
+        let mut button = Button::new(VALUES.reroll_button_text);
+        button.set_onclick(Callback::from(|| -> Self::MSG {
+            FiveDiceMessage::RollDice
+        }));
+        ret.push_new_row(Box::new(button));
         ret.push_current_row(Box::new(Text::new(&format!(
             "Remaining rolls: {}",
             self.remaining_rolls
@@ -312,14 +307,11 @@ impl Widget for Game {
     type MSG = FiveDiceMessage;
     fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
-        ret.push_current_row(Box::new(Button::new(
-            "Start Over",
-            None,
-            Color::from_str("black").unwrap(),
-            Some(Callback::from(|| -> Self::MSG {
-                FiveDiceMessage::StartOver
-            })),
-        )));
+        let mut button = Button::new("Start Over");
+        button.set_onclick(Callback::from(|| -> Self::MSG {
+            FiveDiceMessage::StartOver
+        }));
+        ret.push_current_row(Box::new(button));
         ret.push_new_row(self.player.get_hand());
         ret
     }

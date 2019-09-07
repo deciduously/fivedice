@@ -201,7 +201,7 @@ impl AddAssign for Region {
     /// # Examples
     /// ```
     /// extern crate widget_grid;
-    /// use widget_grid::Region;
+    /// use widget_grid::types::Region;
     ///
     /// # fn main() {
     ///     // origin in region, larger

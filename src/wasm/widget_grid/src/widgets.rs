@@ -4,7 +4,7 @@ use crate::{
     window::WindowPtr,
     {Color, Point, Rc, Region, Result, VALUES},
 };
-use std::marker::PhantomData;
+use std::{marker::PhantomData, str::FromStr};
 //
 // Reusable Drawables
 //
@@ -60,8 +60,7 @@ impl<T: 'static> Widget for Text<T> {
 
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
 /// Takes a callback to call upon click and a value to pass to the callback
-// TODO buttons seem to only accent clicks under the text, not around the whole rectangle
-#[derive(Clone)]
+// TODO buttons seem to only accept clicks under the text, not around the whole rectangle
 pub struct Button<T> {
     bottom_right: Option<Point>,
     callback: Option<Callback<T>>,
@@ -73,17 +72,55 @@ impl<T> Button<T>
 where
     T: 'static,
 {
-    pub fn new(
-        s: &str,
-        bottom_right: Option<Point>,
-        color: Color,
-        callback: Option<Callback<T>>,
-    ) -> Self {
+    pub fn new(s: &str) -> Self {
+        let mut ret = Self::default();
+        ret.text = s.into();
+        ret
+    }
+
+    /// Add a border color
+    pub fn add_border_color(&mut self, color: Color) -> &mut Self {
+        self.color = color;
+        self
+    }
+
+    /// Set onclick action
+    pub fn set_onclick(&mut self, f: Callback<T>) -> &mut Self {
+        self.callback = Some(f);
+        self
+    }
+
+    /// Set size
+    pub fn set_size(&mut self, width: f64, height: f64) -> &mut Self {
+        self.bottom_right = Some((width, height).into());
+        self
+    }
+}
+
+impl<T> Clone for Button<T>
+where
+    T: 'static,
+{
+    fn clone(&self) -> Self {
+        let mut ret = Button::new(&self.text);
+        if let Some(br) = self.bottom_right {
+            ret.set_size(br.x, br.y);
+        }
+        if let Some(c) = &self.callback {
+            ret.set_onclick(c.clone());
+        }
+        ret.add_border_color(self.color);
+        ret
+    }
+}
+
+impl<T> Default for Button<T> {
+    fn default() -> Self {
         Self {
-            bottom_right,
-            callback,
-            color,
-            text: s.into(),
+            bottom_right: None,
+            callback: None,
+            color: Color::from_str("black").unwrap(),
+            text: "".into(),
         }
     }
 }
@@ -141,14 +178,7 @@ impl<T: 'static> Widget for Button<T> {
     }
     fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
-        // TODO why can't you use the derived Clone??
-        let self_clone = Button::new(
-            &self.text,
-            self.bottom_right,
-            self.color,
-            self.callback.clone(),
-        );
-        ret.set_drawable(Box::new(self_clone));
+        ret.set_drawable(Box::new(self.clone()));
         ret
     }
 }
