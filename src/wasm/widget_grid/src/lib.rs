@@ -9,7 +9,7 @@ use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 #[macro_use]
 mod dom;
 /// Error type
-pub mod error;
+mod error;
 /// FFI initiation
 pub mod ffi;
 /// Drawable and Widget traits, as well as MountedWidget type

@@ -18,8 +18,17 @@ pub struct Text<T> {
 impl<T> Text<T> {
     pub fn new(s: &str) -> Self {
         Self {
-            phantom: PhantomData, // TODO - really?  No better solution?
+            phantom: PhantomData,
             text: s.into(),
+        }
+    }
+}
+
+impl<T> Clone for Text<T> {
+    fn clone(&self) -> Self {
+        Self {
+            phantom: PhantomData,
+            text: self.text.clone(),
         }
     }
 }
@@ -43,11 +52,10 @@ impl<T> Drawable for Text<T> {
 }
 
 impl<T: 'static> Widget for Text<T> {
-    type MSG = T; // TODO this is why you need the PhantomData
+    type MSG = T;
     fn mount_widget(&self) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new();
-        let t: Text<Self::MSG> = Text::new(&self.text);
-        ret.set_drawable(Box::new(t));
+        ret.set_drawable(Box::new(self.clone()));
         ret
     }
     fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<Option<Self::MSG>> {
