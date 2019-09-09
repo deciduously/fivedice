@@ -1,7 +1,7 @@
 // game.rs contains the game logic
 
 use js_sys::Math::{floor, random};
-use std::{rc::Rc, str::FromStr};
+use std::{collections::HashSet, rc::Rc, str::FromStr};
 //use web_sys::console;
 use widget_grid::{
     traits::{MountedWidget, Widget},
@@ -21,28 +21,111 @@ pub fn js_gen_range(min: i64, max: i64) -> i64 {
 // Number of dice in a turn
 pub const HAND_SIZE: usize = 5;
 
+/// Each possible option
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ScoreType {
+    Ones(u8),
+    Twos(u8),
+    Threes(u8),
+    Fours(u8),
+    Fives(u8),
+    Sixes(u8),
+    ThreeKind,
+    FourKind,
+    TwoAndThree,
+    SmStraight,
+    LgStraight,
+    AllFive,
+    AllFiveBonus(u8),
+    StoneSoup(u8),
+}
+
+/// A single score option
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ScoreSlot {
+    taken: bool,
+    value: ScoreType,
+}
+
+impl ScoreSlot {
+    fn new(value: ScoreType) -> Self {
+        Self {
+            taken: false,
+            value,
+        }
+    }
+}
+
+impl Widget for ScoreSlot {
+    type MSG = FiveDiceMessage;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new();
+        ret.push_current_row(Box::new(Text::new(&format!("{:?}", self))));
+        ret
+    }
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> WindowResult<Option<Self::MSG>> {
+        Ok(None)
+    }
+}
+
 /// A single player's score object
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 struct Score {
-    ones: Option<u8>,
-    twos: Option<u8>,
-    threes: Option<u8>,
-    fours: Option<u8>,
-    fives: Option<u8>,
-    sixes: Option<u8>,
-    three_kind: bool,
-    four_kind: bool,
-    two_and_three: bool,
-    sm_straight: bool,
-    lg_straight: bool,
-    five_dice: bool,
-    five_dice_again: Option<u8>,
-    stone_soup: Option<u8>,
+    slots: HashSet<ScoreSlot>,
 }
 
 impl Score {
     fn new() -> Self {
         Self::default()
+    }
+}
+
+impl Default for Score {
+    fn default() -> Self {
+        use ScoreType::*;
+        let mut ret = Self {
+            slots: HashSet::new(),
+        };
+        ret.slots.insert(ScoreSlot::new(Ones(0)));
+        ret.slots.insert(ScoreSlot::new(Twos(0)));
+        ret.slots.insert(ScoreSlot::new(Threes(0)));
+        ret.slots.insert(ScoreSlot::new(Fours(0)));
+        ret.slots.insert(ScoreSlot::new(Fives(0)));
+        ret.slots.insert(ScoreSlot::new(Sixes(0)));
+        ret.slots.insert(ScoreSlot::new(ThreeKind));
+        ret.slots.insert(ScoreSlot::new(FourKind));
+        ret.slots.insert(ScoreSlot::new(TwoAndThree));
+        ret.slots.insert(ScoreSlot::new(SmStraight));
+        ret.slots.insert(ScoreSlot::new(LgStraight));
+        ret.slots.insert(ScoreSlot::new(AllFive));
+        ret.slots.insert(ScoreSlot::new(AllFiveBonus(0)));
+        ret.slots.insert(ScoreSlot::new(StoneSoup(0)));
+        ret
+    }
+}
+
+impl Widget for Score {
+    type MSG = FiveDiceMessage;
+    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new();
+        // first in first row
+        for slot in &self.slots {
+            ret.push_new_row(Box::new(*slot));
+        }
+        ret
+    }
+    fn handle_click(
+        &mut self,
+        top_left: Point,
+        click: Point,
+        w: WindowPtr,
+    ) -> WindowResult<Option<Self::MSG>> {
+        Ok(None)
     }
 }
 
@@ -243,13 +326,20 @@ pub enum FiveDiceMessage {
 pub struct Game {
     // For now, just a solo game
     player: Player,
+    score: Score,
 }
 
 impl Game {
     pub fn new() -> Self {
         Self {
             player: Player::new(),
+            score: Score::new(),
         }
+    }
+
+    /// Get a pointer to the current score
+    fn get_score(&self) -> &Score {
+        &self.score
     }
 
     // Toggle one die on the player
@@ -291,6 +381,8 @@ impl Widget for Game {
         }));
         ret.push_current_row(Box::new(button));
         ret.push_new_row(self.player.get_hand());
+        // TODO Hand is overlapping - looks like it doesn't notice the actual bottom_right for the hand widget, just the text
+        ret.push_new_row(Box::new(self.get_score().clone()));
         ret
     }
     fn handle_click(
