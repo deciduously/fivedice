@@ -5,7 +5,7 @@ use std::{rc::Rc, str::FromStr};
 //use web_sys::console;
 use widget_grid::{
     traits::{MountedWidget, Widget},
-    types::{Callback, Color, Point, Region},
+    types::{Callback, Color, Point},
     widgets::{Button, Text},
     window::WindowPtr,
     VALUES,
@@ -129,10 +129,6 @@ impl Widget for Die {
         ret.push_current_row(Box::new(button));
         ret
     }
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        let mw: MountedWidget<Self::MSG> = self.mount_widget();
-        mw.get_region(top_left, w)
-    }
     fn handle_click(
         &mut self,
         top_left: Point,
@@ -202,19 +198,6 @@ impl Widget for Hand {
             self.remaining_rolls
         ))));
         ret
-    }
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        let mut ret = (top_left, 0.0, 0.0).into();
-        let mut cursor = top_left;
-        for die in &self.dice {
-            // You've got to use a cursor
-            let mw: MountedWidget<Self::MSG> = die.mount_widget();
-            let region = mw.get_region(cursor, Rc::clone(&w))?;
-            ret += region;
-            cursor = region.top_right();
-            cursor.horiz_offset(VALUES.padding)?;
-        }
-        Ok(ret)
     }
     fn handle_click(
         &mut self,
@@ -314,10 +297,6 @@ impl Widget for Game {
         ret.push_current_row(Box::new(button));
         ret.push_new_row(self.player.get_hand());
         ret
-    }
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> WindowResult<Region> {
-        let mw: MountedWidget<Self::MSG> = self.player.get_hand().mount_widget();
-        mw.get_region(top_left, w)
     }
     fn handle_click(
         &mut self,

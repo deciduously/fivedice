@@ -21,8 +21,6 @@ pub trait Drawable {
 /// Each one can have variable number rows and elements in each row
 pub trait Widget {
     type MSG;
-    /// Get the total of all regions of this widget
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region>;
     /// Handle a click in this region
     fn handle_click(
         &mut self,
@@ -126,7 +124,9 @@ impl<T> MountedWidget<T> {
             for row in &self.children {
                 for child in row {
                     let child_top_left = cursor;
-                    let region = child.get_region(child_top_left, Rc::clone(&w))?;
+                    let region = child
+                        .mount_widget()
+                        .get_region(child_top_left, Rc::clone(&w))?;
                     if region.bottom_right() > bottom_right {
                         bottom_right = region.bottom_right();
                     }
@@ -138,7 +138,7 @@ impl<T> MountedWidget<T> {
         }
     }
 
-    /// Handle a click - broken??? - 0 die is correct, 1 die hits die 4, rest dead. seems like cursor increments too much?
+    /// Handle a click
     pub fn click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
         // iterate through widgets, handle all their clicks, h/andle drawable's click
         let mut cursor = top_left;
@@ -153,6 +153,7 @@ impl<T> MountedWidget<T> {
                 // set to bottom right first
                 cursor.set_to(
                     child
+                        .mount_widget()
                         .get_region(child_top_left, Rc::clone(&w))?
                         .bottom_right(),
                 )?;

@@ -61,9 +61,6 @@ impl<T: 'static> Widget for Text<T> {
     fn handle_click(&mut self, _: Point, _: Point, _: WindowPtr) -> Result<Option<Self::MSG>> {
         Ok(None)
     }
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
-        Drawable::get_region(self, top_left, w)
-    }
 }
 
 /// Generic button type.  Optionally takes a "bottom right" point as a width and height
@@ -166,9 +163,6 @@ impl<T> Drawable for Button<T> {
 
 impl<T: 'static> Widget for Button<T> {
     type MSG = T;
-    fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
-        Drawable::get_region(self, top_left, w)
-    }
     fn handle_click(
         &mut self,
         top_left: Point,
