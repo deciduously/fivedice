@@ -206,12 +206,7 @@ impl Widget for Hand {
         w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
         let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
-        let msg = mw.click(top_left, click, Rc::clone(&w))?;
-        if msg.is_some() {
-            Ok(msg)
-        } else {
-            Ok(None)
-        }
+        mw.click(top_left, click, Rc::clone(&w))
     }
 }
 
