@@ -40,6 +40,14 @@ enum ScoreType {
     StoneSoup(u8),
 }
 
+impl ScoreType {
+    /// Return whether this score can be taken from the current hand
+    fn isValid(&self, hand: &Hand) -> bool {
+        unimplemented!()
+        // match self...
+    }
+}
+
 /// A single score option
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ScoreSlot {
