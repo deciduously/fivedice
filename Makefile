@@ -1,26 +1,22 @@
-.PHONY: all clean deploy pkgclean help
+.PHONY: all deploy help preapre
 
 RUSTCLEAN=cargo clean
 RUST=wasm-pack build
 PKGDIR=pkg
-OUTDIR=docs
 EXEC=fivedice_bg.wasm
 OPT=./shrink-wasm.sh -f=speed -l=aggro
 
-all: pkgclean $(PKGDIR)/$(EXEC)
+all: prepare $(PKGDIR)/$(EXEC)
 	$(OPT)
 
 $(PKGDIR)/$(EXEC):
 	$(RUST)
 
-clean: pkgclean
-	rm $(OUTDIR)/*
-
-deploy: clean all
+deploy: all
 	npm run build
 
-pkgclean:
-	rm $(PKGDIR)/$(EXEC)
-
 help:
-    @echo "Usage: make {all|clean|deploy|help}" 1>&2 && false
+    @echo "Usage: make {all|deploy|help}" 1>&2 && false
+
+prepare:
+	rm -f $(PKGDIR)/$(EXEC)
