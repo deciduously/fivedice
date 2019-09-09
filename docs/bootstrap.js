@@ -64,51 +64,6 @@
 /******/ 					"__wbg_floor_5efa4e3d8e57289e": function(p0f64) {
 /******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_floor_5efa4e3d8e57289e"](p0f64);
 /******/ 					},
-/******/ 					"__widl_f_clear_rect_CanvasRenderingContext2D": function(p0i32,p1f64,p2f64,p3f64,p4f64) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_clear_rect_CanvasRenderingContext2D"](p0i32,p1f64,p2f64,p3f64,p4f64);
-/******/ 					},
-/******/ 					"__wbindgen_string_new": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_string_new"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__widl_f_set_stroke_style_CanvasRenderingContext2D": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_set_stroke_style_CanvasRenderingContext2D"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__widl_f_rect_CanvasRenderingContext2D": function(p0i32,p1f64,p2f64,p3f64,p4f64) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_rect_CanvasRenderingContext2D"](p0i32,p1f64,p2f64,p3f64,p4f64);
-/******/ 					},
-/******/ 					"__widl_f_begin_path_CanvasRenderingContext2D": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_begin_path_CanvasRenderingContext2D"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_stroke_CanvasRenderingContext2D": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_stroke_CanvasRenderingContext2D"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_set_font_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_set_font_CanvasRenderingContext2D"](p0i32,p1i32,p2i32);
-/******/ 					},
-/******/ 					"__widl_f_fill_text_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32,p3f64,p4f64) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_fill_text_CanvasRenderingContext2D"](p0i32,p1i32,p2i32,p3f64,p4f64);
-/******/ 					},
-/******/ 					"__widl_f_measure_text_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_measure_text_CanvasRenderingContext2D"](p0i32,p1i32,p2i32);
-/******/ 					},
-/******/ 					"__widl_f_width_TextMetrics": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_TextMetrics"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_document_Window": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_document_Window"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_body_Document": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_body_Document"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_query_selector_Element": function(p0i32,p1i32,p2i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_query_selector_Element"](p0i32,p1i32,p2i32);
-/******/ 					},
-/******/ 					"__widl_instanceof_HTMLCanvasElement": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_instanceof_HTMLCanvasElement"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_request_animation_frame_Window": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_request_animation_frame_Window"](p0i32,p1i32);
-/******/ 					},
 /******/ 					"__wbg_new_59cb74e423758ede": function() {
 /******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_new_59cb74e423758ede"]();
 /******/ 					},
@@ -118,71 +73,8 @@
 /******/ 					"__wbg_error_4bb6c2a97407129a": function(p0i32,p1i32) {
 /******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_error_4bb6c2a97407129a"](p0i32,p1i32);
 /******/ 					},
-/******/ 					"__wbg_globalThis_36c1f2e85948e420": function() {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_globalThis_36c1f2e85948e420"]();
-/******/ 					},
-/******/ 					"__wbg_self_73c7a601ff857345": function() {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_self_73c7a601ff857345"]();
-/******/ 					},
-/******/ 					"__wbg_window_ca735e04cb2b0566": function() {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_window_ca735e04cb2b0566"]();
-/******/ 					},
-/******/ 					"__wbg_global_99312a595fd2e761": function() {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_global_99312a595fd2e761"]();
-/******/ 					},
-/******/ 					"__wbindgen_is_undefined": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_is_undefined"](p0i32);
-/******/ 					},
-/******/ 					"__wbg_newnoargs_6ad69a50998c5acb": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_newnoargs_6ad69a50998c5acb"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__wbg_call_4499dca0c553c196": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_call_4499dca0c553c196"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__wbindgen_object_clone_ref": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_object_clone_ref"](p0i32);
-/******/ 					},
-/******/ 					"__widl_instanceof_Window": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_instanceof_Window"](p0i32);
-/******/ 					},
-/******/ 					"__wbindgen_debug_string": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_debug_string"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__wbindgen_throw": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_throw"](p0i32,p1i32);
-/******/ 					},
-/******/ 					"__widl_f_get_bounding_client_rect_Element": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_get_bounding_client_rect_Element"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_width_HTMLCanvasElement": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_HTMLCanvasElement"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_width_DOMRect": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_DOMRect"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_height_HTMLCanvasElement": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_height_HTMLCanvasElement"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_height_DOMRect": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_height_DOMRect"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_client_x_MouseEvent": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_client_x_MouseEvent"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_left_DOMRectReadOnly": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_left_DOMRectReadOnly"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_client_y_MouseEvent": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_client_y_MouseEvent"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_top_DOMRectReadOnly": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_top_DOMRectReadOnly"](p0i32);
-/******/ 					},
-/******/ 					"__wbindgen_cb_drop": function(p0i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_cb_drop"](p0i32);
-/******/ 					},
-/******/ 					"__widl_f_error_2_": function(p0i32,p1i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_error_2_"](p0i32,p1i32);
+/******/ 					"__widl_f_body_Document": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_body_Document"](p0i32);
 /******/ 					},
 /******/ 					"__widl_f_create_element_Document": function(p0i32,p1i32,p2i32) {
 /******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_create_element_Document"](p0i32,p1i32,p2i32);
@@ -214,11 +106,119 @@
 /******/ 					"__wbindgen_cb_forget": function(p0i32) {
 /******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_cb_forget"](p0i32);
 /******/ 					},
-/******/ 					"__wbindgen_closure_wrapper519": function(p0i32,p1i32,p2i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_closure_wrapper519"](p0i32,p1i32,p2i32);
+/******/ 					"__wbindgen_cb_drop": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_cb_drop"](p0i32);
 /******/ 					},
-/******/ 					"__wbindgen_closure_wrapper518": function(p0i32,p1i32,p2i32) {
-/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_closure_wrapper518"](p0i32,p1i32,p2i32);
+/******/ 					"__widl_f_get_bounding_client_rect_Element": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_get_bounding_client_rect_Element"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_width_HTMLCanvasElement": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_HTMLCanvasElement"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_width_DOMRect": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_DOMRect"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_height_HTMLCanvasElement": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_height_HTMLCanvasElement"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_height_DOMRect": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_height_DOMRect"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_client_x_MouseEvent": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_client_x_MouseEvent"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_left_DOMRectReadOnly": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_left_DOMRectReadOnly"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_client_y_MouseEvent": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_client_y_MouseEvent"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_top_DOMRectReadOnly": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_top_DOMRectReadOnly"](p0i32);
+/******/ 					},
+/******/ 					"__wbindgen_string_new": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_string_new"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__widl_f_error_2_": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_error_2_"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbindgen_debug_string": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_debug_string"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbindgen_throw": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_throw"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbg_globalThis_36c1f2e85948e420": function() {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_globalThis_36c1f2e85948e420"]();
+/******/ 					},
+/******/ 					"__wbg_self_73c7a601ff857345": function() {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_self_73c7a601ff857345"]();
+/******/ 					},
+/******/ 					"__wbg_window_ca735e04cb2b0566": function() {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_window_ca735e04cb2b0566"]();
+/******/ 					},
+/******/ 					"__wbg_global_99312a595fd2e761": function() {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_global_99312a595fd2e761"]();
+/******/ 					},
+/******/ 					"__wbindgen_is_undefined": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_is_undefined"](p0i32);
+/******/ 					},
+/******/ 					"__wbg_newnoargs_6ad69a50998c5acb": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_newnoargs_6ad69a50998c5acb"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbg_call_4499dca0c553c196": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbg_call_4499dca0c553c196"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbindgen_object_clone_ref": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_object_clone_ref"](p0i32);
+/******/ 					},
+/******/ 					"__widl_instanceof_Window": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_instanceof_Window"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_clear_rect_CanvasRenderingContext2D": function(p0i32,p1f64,p2f64,p3f64,p4f64) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_clear_rect_CanvasRenderingContext2D"](p0i32,p1f64,p2f64,p3f64,p4f64);
+/******/ 					},
+/******/ 					"__widl_f_set_stroke_style_CanvasRenderingContext2D": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_set_stroke_style_CanvasRenderingContext2D"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__widl_f_rect_CanvasRenderingContext2D": function(p0i32,p1f64,p2f64,p3f64,p4f64) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_rect_CanvasRenderingContext2D"](p0i32,p1f64,p2f64,p3f64,p4f64);
+/******/ 					},
+/******/ 					"__widl_f_begin_path_CanvasRenderingContext2D": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_begin_path_CanvasRenderingContext2D"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_stroke_CanvasRenderingContext2D": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_stroke_CanvasRenderingContext2D"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_set_font_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_set_font_CanvasRenderingContext2D"](p0i32,p1i32,p2i32);
+/******/ 					},
+/******/ 					"__widl_f_fill_text_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32,p3f64,p4f64) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_fill_text_CanvasRenderingContext2D"](p0i32,p1i32,p2i32,p3f64,p4f64);
+/******/ 					},
+/******/ 					"__widl_f_measure_text_CanvasRenderingContext2D": function(p0i32,p1i32,p2i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_measure_text_CanvasRenderingContext2D"](p0i32,p1i32,p2i32);
+/******/ 					},
+/******/ 					"__widl_f_width_TextMetrics": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_width_TextMetrics"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_document_Window": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_document_Window"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_query_selector_Element": function(p0i32,p1i32,p2i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_query_selector_Element"](p0i32,p1i32,p2i32);
+/******/ 					},
+/******/ 					"__widl_instanceof_HTMLCanvasElement": function(p0i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_instanceof_HTMLCanvasElement"](p0i32);
+/******/ 					},
+/******/ 					"__widl_f_request_animation_frame_Window": function(p0i32,p1i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__widl_f_request_animation_frame_Window"](p0i32,p1i32);
+/******/ 					},
+/******/ 					"__wbindgen_closure_wrapper169": function(p0i32,p1i32,p2i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_closure_wrapper169"](p0i32,p1i32,p2i32);
+/******/ 					},
+/******/ 					"__wbindgen_closure_wrapper168": function(p0i32,p1i32,p2i32) {
+/******/ 						return installedModules["./pkg/fivedice.js"].exports["__wbindgen_closure_wrapper168"](p0i32,p1i32,p2i32);
 /******/ 					}
 /******/ 				}
 /******/ 			};
@@ -321,7 +321,7 @@
 /******/ 				promises.push(installedWasmModuleData);
 /******/ 			else {
 /******/ 				var importObject = wasmImportObjects[wasmModuleId]();
-/******/ 				var req = fetch(__webpack_require__.p + "" + {"./pkg/fivedice_bg.wasm":"fc6390c6d6b652a902e9"}[wasmModuleId] + ".module.wasm");
+/******/ 				var req = fetch(__webpack_require__.p + "" + {"./pkg/fivedice_bg.wasm":"180e2487650bc8228a82"}[wasmModuleId] + ".module.wasm");
 /******/ 				var promise;
 /******/ 				if(importObject instanceof Promise && typeof WebAssembly.compileStreaming === 'function') {
 /******/ 					promise = Promise.all([WebAssembly.compileStreaming(req), importObject]).then(function(items) {
