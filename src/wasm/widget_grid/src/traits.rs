@@ -6,10 +6,8 @@ use crate::{
 
 use std::{fmt, rc::Rc};
 //use web_sys::console;
-// TODO YOU CAN IMPL TRAIT FOR BOX<dyn TRAIT>
+// TODO YOU CAN IMPL TRAIT FOR BOX<dyn TRAIT> - do I care?
 // it should also be able to auto-derive get_region(), that's a solved problem
-
-// TODO Builder Pattern all the things - widget, text, drawable
 
 /// Trait representing things that can be drawn to the canvas
 pub trait Drawable {
@@ -55,7 +53,7 @@ impl<T> MountedWidget<T> {
         ret
     }
 
-    /// Draw this element - pass true to actually draw, false to just return the bottom_right
+    /// Walk the grid.  Pass true to render each drawable, false to just return the bottom_right
     pub fn draw(&self, w: WindowPtr, should_draw: bool) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
@@ -75,7 +73,7 @@ impl<T> MountedWidget<T> {
                 let mut child_bottom_right =
                     mounted_child.get_region(Rc::clone(&w))?.bottom_right();
 
-                // if bottom right is off the screen, move to the next line instead and re-mount
+                // if bottom right is off the screen, move to the next line instead
                 if !values.canvas_region.contains(child_bottom_right) {
                     child_top_left = (
                         values.padding,
@@ -96,7 +94,6 @@ impl<T> MountedWidget<T> {
                 if child_bottom_right > bottom_right {
                     bottom_right = child_bottom_right;
                 }
-                // Advance cursor to next child top left
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 cursor.horiz_offset(values.padding)?;
             }
@@ -104,7 +101,7 @@ impl<T> MountedWidget<T> {
             cursor.vert_offset((values.padding * 2.0) + vertical_offset)?;
             cursor.horiz_offset(-(cursor.x - values.padding))?;
         }
-        // draw self, if present and should_draw
+        // draw self, if present
         if let Some(d) = &self.drawable {
             // The drawable should start at the top left!!!
             // a widget's drawable should encompass all child elements
@@ -148,6 +145,8 @@ impl<T> MountedWidget<T> {
         let mut cursor = self.top_left;
         let values = w.get_values();
         for row in self.children.iter_mut() {
+            let row_top_left = cursor;
+            let mut vertical_offset = 0.0;
             for child in row.iter_mut() {
                 let child_top_left = cursor;
                 // if you change this to child.mount_widget().click() it all breaks (and probably shouldn't)
@@ -165,9 +164,13 @@ impl<T> MountedWidget<T> {
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 // if the horizontal scroll fails, set to next row down instead
                 cursor.horiz_offset(values.padding)?;
+                // check if tallest
+                let offset = cursor.y - row_top_left.y;
+                if offset > vertical_offset {
+                    vertical_offset = offset;
+                }
             }
-            // TODO this is now BROKEN, VALUES.die_dimension was always wrong
-            // cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+            cursor.vert_offset(values.padding + vertical_offset + values.padding)?;
             cursor.horiz_offset(-(cursor.x - values.padding))?;
         }
         Ok(None)
