@@ -395,11 +395,11 @@ impl Widget for Game {
     type MSG = FiveDiceMessage;
     fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
         let mut ret = MountedWidget::new(top_left);
-        let mut button = Button::new("Start Over");
-        button.set_onclick(Callback::from(|| -> Self::MSG {
+        let mut start_over_button = Button::new("Start Over");
+        start_over_button.set_onclick(Callback::from(|| -> Self::MSG {
             FiveDiceMessage::StartOver
         }));
-        ret.push_current_row(Box::new(button));
+        ret.push_current_row(Box::new(start_over_button));
         ret.push_new_row(self.player.get_hand());
         ret.push_new_row(Box::new(self.get_score().clone()));
         ret

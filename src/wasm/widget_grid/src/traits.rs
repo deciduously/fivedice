@@ -55,8 +55,8 @@ impl<T> MountedWidget<T> {
         ret
     }
 
-    /// Draw this element - pass true to actually render elements, false to just return the bottom right
-    pub fn draw(&self, w: WindowPtr) -> Result<Point> {
+    /// Draw this element - pass true to actually draw, false to just return the bottom_right
+    pub fn draw(&self, w: WindowPtr, should_draw: bool) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
         let mut cursor = self.top_left;
@@ -75,7 +75,7 @@ impl<T> MountedWidget<T> {
                 let mut child_bottom_right =
                     mounted_child.get_region(Rc::clone(&w))?.bottom_right();
 
-                // if bottom right is off the screen, move to the next line instead
+                // if bottom right is off the screen, move to the next line instead and re-mount
                 if !values.canvas_region.contains(child_bottom_right) {
                     child_top_left = (
                         values.padding,
@@ -87,7 +87,7 @@ impl<T> MountedWidget<T> {
                 }
 
                 // draw the child
-                cursor.set_to(mounted_child.draw(Rc::clone(&w))?)?;
+                cursor.set_to(mounted_child.draw(Rc::clone(&w), should_draw)?)?;
                 // check if tallest
                 let offset = cursor.y - row_top_left.y;
                 if offset > vertical_offset {
@@ -96,6 +96,7 @@ impl<T> MountedWidget<T> {
                 if child_bottom_right > bottom_right {
                     bottom_right = child_bottom_right;
                 }
+                // Advance cursor to next child top left
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 cursor.horiz_offset(values.padding)?;
             }
@@ -103,14 +104,18 @@ impl<T> MountedWidget<T> {
             cursor.vert_offset((values.padding * 2.0) + vertical_offset)?;
             cursor.horiz_offset(-(cursor.x - values.padding))?;
         }
-        // draw self, if present
+        // draw self, if present and should_draw
         if let Some(d) = &self.drawable {
             // The drawable should start at the top left!!!
             // a widget's drawable should encompass all child elements
             // widget.drawable.get_region().origin() <= widget.get_get_region.origin() &&
             // widget.drawable.get_region().bottom_right >= last_child.get_region().bottom_right()
-            cursor.set_to(d.draw_at(self.top_left, w)?)?;
-            bottom_right = cursor;
+            if should_draw {
+                cursor.set_to(d.draw_at(self.top_left, w)?)?;
+                bottom_right = cursor;
+            } else {
+                bottom_right = d.get_region(self.top_left, w)?.bottom_right();
+            }
         }
         // Return bottom right
         Ok(bottom_right)
@@ -134,27 +139,7 @@ impl<T> MountedWidget<T> {
 
     /// Get the entire region encompassing this MountedWidget
     pub fn get_region(&self, w: WindowPtr) -> Result<Region> {
-        // TODO this is the same as drawing but...doesn't draw, and i'm gonna use it again for handle-click!
-        if let Some(d) = &self.drawable {
-            d.get_region(self.top_left, w)
-        } else {
-            let mut cursor = self.top_left;
-            let mut bottom_right = self.top_left;
-            for row in &self.children {
-                for child in row {
-                    let child_top_left = cursor;
-                    let region = child
-                        .mount_widget(child_top_left)
-                        .get_region(Rc::clone(&w))?;
-                    if region.bottom_right() > bottom_right {
-                        bottom_right = region.bottom_right();
-                    }
-                    cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                    cursor.horiz_offset(w.get_values().padding)?;
-                }
-            }
-            Ok((self.top_left, bottom_right).into())
-        }
+        Ok((self.top_left, self.draw(w, false)?).into())
     }
 
     /// Handle a click
