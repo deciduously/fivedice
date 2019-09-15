@@ -53,8 +53,8 @@ impl<T> Drawable for Text<T> {
 
 impl<T: 'static> Widget for Text<T> {
     type MSG = T;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         ret.set_drawable(Box::new(self.clone()));
         ret
     }
@@ -178,8 +178,8 @@ impl<T: 'static> Widget for Button<T> {
             Ok(None)
         }
     }
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         ret.set_drawable(Box::new(self.clone()));
         ret
     }

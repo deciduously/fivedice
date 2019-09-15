@@ -3,7 +3,7 @@ use crate::{
     {fmt, Point, Region, Result, VALUES},
 };
 use std::rc::Rc;
-// TODO
+// TODO YOU CAN IMPL TRAIT FOR BOX<dyn TRAIT>
 // it should also be able to auto-derive get_region(), that's a solved problem
 
 // TODO Builder Pattern all the things - widget, text, drawable
@@ -35,45 +35,67 @@ pub trait Widget {
     //     //push some elements
     //     ret
     // }
-    fn mount_widget(&self) -> MountedWidget<Self::MSG>;
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG>;
 }
 
 /// A container struct for a widget
 pub struct MountedWidget<T> {
     children: Vec<Vec<Box<dyn Widget<MSG = T>>>>,
     drawable: Option<Box<dyn Drawable>>,
+    top_left: Point,
 }
 
 impl<T> MountedWidget<T> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(p: Point) -> Self {
+        let mut ret = Self::default();
+        ret.top_left = p;
+        ret
     }
 
     /// Draw this element - pass true to actually render elements, false to just return the bottom right
-    pub fn draw(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
+    pub fn draw(&self, w: WindowPtr) -> Result<Point> {
         // Draw all constituent widgets, updating the cursor after each
         // Draw any child widgets
-        let mut cursor = top_left;
-        let mut bottom_right = top_left;
+        let mut cursor = self.top_left;
+        let mut bottom_right = self.top_left;
         let mut vertical_offset = 0.0;
         for row in &self.children {
             let row_top_left = cursor;
             // Draw each child
             for child in row {
                 // Mount the child
-                let child_top_left = cursor;
-                let mounted_child = child.mount_widget();
+                // TODO remove this mut - just init in the let binding
+                let mut child_top_left = cursor;
+                let mut mounted_child = child.mount_widget(child_top_left);
+                // store possible bottom right
+                let mut child_bottom_right =
+                    mounted_child.get_region(Rc::clone(&w))?.bottom_right();
+
+                // if bottom right is off the screen, move to the next line instead
+                let canvas_region: Region = (
+                    0.0,
+                    0.0,
+                    f64::from(VALUES.canvas_size.0),
+                    f64::from(VALUES.canvas_size.1),
+                )
+                    .into();
+                if !canvas_region.contains(child_bottom_right) {
+                    child_top_left = (
+                        VALUES.padding,
+                        (child_bottom_right.y - child_top_left.y) + VALUES.padding + cursor.y,
+                    )
+                        .into();
+                    mounted_child = child.mount_widget(child_top_left);
+                    child_bottom_right = mounted_child.get_region(Rc::clone(&w))?.bottom_right();
+                }
+
                 // draw the child
-                cursor.set_to(mounted_child.draw(child_top_left, Rc::clone(&w))?)?;
+                cursor.set_to(mounted_child.draw(Rc::clone(&w))?)?;
                 // check if tallest
                 let offset = cursor.y - row_top_left.y;
                 if offset > vertical_offset {
                     vertical_offset = offset;
                 }
-                // store possible bottom right
-                let child_bottom_right = mounted_child
-                    .get_region(child_top_left, Rc::clone(&w))?
-                    .bottom_right();
                 if child_bottom_right > bottom_right {
                     bottom_right = child_bottom_right;
                 }
@@ -90,7 +112,7 @@ impl<T> MountedWidget<T> {
             // a widget's drawable should encompass all child elements
             // widget.drawable.get_region().origin() <= widget.get_get_region.origin() &&
             // widget.drawable.get_region().bottom_right >= last_child.get_region().bottom_right()
-            cursor.set_to(d.draw_at(top_left, w)?)?;
+            cursor.set_to(d.draw_at(self.top_left, w)?)?;
             bottom_right = cursor;
         }
         // Return bottom right
@@ -114,19 +136,19 @@ impl<T> MountedWidget<T> {
     }
 
     /// Get the entire region encompassing this MountedWidget
-    pub fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
+    pub fn get_region(&self, w: WindowPtr) -> Result<Region> {
         // TODO this is the same as drawing but...doesn't draw, and i'm gonna use it again for handle-click!
         if let Some(d) = &self.drawable {
-            d.get_region(top_left, w)
+            d.get_region(self.top_left, w)
         } else {
-            let mut cursor = top_left;
-            let mut bottom_right = top_left;
+            let mut cursor = self.top_left;
+            let mut bottom_right = self.top_left;
             for row in &self.children {
                 for child in row {
                     let child_top_left = cursor;
                     let region = child
-                        .mount_widget()
-                        .get_region(child_top_left, Rc::clone(&w))?;
+                        .mount_widget(child_top_left)
+                        .get_region(Rc::clone(&w))?;
                     if region.bottom_right() > bottom_right {
                         bottom_right = region.bottom_right();
                     }
@@ -134,14 +156,14 @@ impl<T> MountedWidget<T> {
                     cursor.horiz_offset(VALUES.padding)?;
                 }
             }
-            Ok((top_left, bottom_right).into())
+            Ok((self.top_left, bottom_right).into())
         }
     }
 
     /// Handle a click
-    pub fn click(&mut self, top_left: Point, click: Point, w: WindowPtr) -> Result<Option<T>> {
-        // iterate through widgets, handle all their clicks, h/andle drawable's click
-        let mut cursor = top_left;
+    pub fn click(&mut self, click: Point, w: WindowPtr) -> Result<Option<T>> {
+        // iterate through widgets, handle all their clicks, handle drawable's click
+        let mut cursor = self.top_left;
         for row in self.children.iter_mut() {
             for child in row.iter_mut() {
                 let child_top_left = cursor;
@@ -153,11 +175,12 @@ impl<T> MountedWidget<T> {
                 // set to bottom right first
                 cursor.set_to(
                     child
-                        .mount_widget()
-                        .get_region(child_top_left, Rc::clone(&w))?
+                        .mount_widget(child_top_left)
+                        .get_region(Rc::clone(&w))?
                         .bottom_right(),
                 )?;
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
+                // if the horizontal scroll fails, set to next row down instead
                 cursor.horiz_offset(VALUES.padding)?;
             }
             cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
@@ -172,6 +195,7 @@ impl<T> Default for MountedWidget<T> {
         Self {
             children: vec![vec![]],
             drawable: None,
+            top_left: Point::default(),
         }
     }
 }

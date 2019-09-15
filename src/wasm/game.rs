@@ -42,9 +42,19 @@ enum ScoreType {
 
 impl ScoreType {
     /// Return whether this score can be taken from the current hand
-    fn isValid(&self, hand: &Hand) -> bool {
-        unimplemented!()
-        // match self...
+    fn _is_valid(&self, _hand: &Hand) -> bool {
+        use ScoreType::*;
+        match self {
+            Ones(_) | Twos(_) | Threes(_) | Fours(_) | Fives(_) | Sixes(_) => true,
+            ThreeKind => false,
+            FourKind => false,
+            TwoAndThree => false,
+            SmStraight => false,
+            LgStraight => false,
+            AllFive => false,
+            AllFiveBonus(_) => false,
+            StoneSoup(_) => true,
+        }
     }
 }
 
@@ -66,16 +76,17 @@ impl ScoreSlot {
 
 impl Widget for ScoreSlot {
     type MSG = FiveDiceMessage;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
-        ret.push_current_row(Box::new(Text::new(&format!("{:?}", self))));
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
+        let button = Button::new(&format!("Add {:?}", self.value));
+        ret.push_current_row(Box::new(button));
         ret
     }
     fn handle_click(
         &mut self,
-        top_left: Point,
-        click: Point,
-        w: WindowPtr,
+        _top_left: Point,
+        _click: Point,
+        _w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
         Ok(None)
     }
@@ -119,19 +130,19 @@ impl Default for Score {
 
 impl Widget for Score {
     type MSG = FiveDiceMessage;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         // first in first row
         for slot in &self.slots {
-            ret.push_new_row(Box::new(*slot));
+            ret.push_current_row(Box::new(*slot));
         }
         ret
     }
     fn handle_click(
         &mut self,
-        top_left: Point,
-        click: Point,
-        w: WindowPtr,
+        _top_left: Point,
+        _click: Point,
+        _w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
         Ok(None)
     }
@@ -202,8 +213,8 @@ impl Die {
 
 impl Widget for Die {
     type MSG = FiveDiceMessage;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         // Will get moved into closure - cannot call self inside, lifetime conflict (need 'static)
         let id = self.id as usize;
         let die_color = if self.held {
@@ -227,8 +238,8 @@ impl Widget for Die {
         w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
         // TODO this is identical to hand, no need to write every time
-        let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
-        Ok(mw.click(top_left, click, w)?)
+        let mut mw: MountedWidget<Self::MSG> = self.mount_widget(top_left);
+        Ok(mw.click(click, w)?)
     }
 }
 
@@ -273,8 +284,8 @@ impl Default for Hand {
 
 impl Widget for Hand {
     type MSG = FiveDiceMessage;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         for die in &self.dice {
             ret.push_current_row(Box::new(*die));
         }
@@ -296,8 +307,8 @@ impl Widget for Hand {
         click: Point,
         w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
-        let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
-        mw.click(top_left, click, Rc::clone(&w))
+        let mut mw: MountedWidget<Self::MSG> = self.mount_widget(top_left);
+        mw.click(click, Rc::clone(&w))
     }
 }
 
@@ -381,15 +392,14 @@ impl Game {
 
 impl Widget for Game {
     type MSG = FiveDiceMessage;
-    fn mount_widget(&self) -> MountedWidget<Self::MSG> {
-        let mut ret = MountedWidget::new();
+    fn mount_widget(&self, top_left: Point) -> MountedWidget<Self::MSG> {
+        let mut ret = MountedWidget::new(top_left);
         let mut button = Button::new("Start Over");
         button.set_onclick(Callback::from(|| -> Self::MSG {
             FiveDiceMessage::StartOver
         }));
         ret.push_current_row(Box::new(button));
         ret.push_new_row(self.player.get_hand());
-        // TODO Hand is overlapping - looks like it doesn't notice the actual bottom_right for the hand widget, just the text
         ret.push_new_row(Box::new(self.get_score().clone()));
         ret
     }
@@ -400,8 +410,8 @@ impl Widget for Game {
         w: WindowPtr,
     ) -> WindowResult<Option<Self::MSG>> {
         // Mount the widget and collect any message for this click point
-        let mut mw: MountedWidget<Self::MSG> = self.mount_widget();
-        let msg = mw.click(top_left, click, w)?;
+        let mut mw: MountedWidget<Self::MSG> = self.mount_widget(top_left);
+        let msg = mw.click(click, w)?;
         if let Some(m) = msg {
             // Handle the click
             self.reducer(m);

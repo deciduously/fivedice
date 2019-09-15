@@ -161,7 +161,7 @@ impl<T> WindowEngine<T> {
         self.window.blank();
         // Draw element
         let w = Rc::clone(&self.window);
-        if let Err(e) = self.element.mount_widget().draw(Point::default(), w) {
+        if let Err(e) = self.element.mount_widget(Point::default()).draw(w) {
             console::error_2(&"Draw".into(), &format!("{}", e).into());
         };
         Ok(())
