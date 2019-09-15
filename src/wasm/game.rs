@@ -8,10 +8,9 @@ use widget_grid::{
     types::{Callback, Color, Point},
     widgets::{Button, Text},
     window::WindowPtr,
-    VALUES,
 };
 
-type WindowResult<T> = widget_grid::Result<T>;
+type WindowResult<T> = widget_grid::error::Result<T>;
 
 /// use js Math.random() to get an integer in range [min, max)
 pub fn js_gen_range(min: i64, max: i64) -> i64 {
@@ -40,9 +39,10 @@ enum ScoreType {
     StoneSoup(u8),
 }
 
+/*
 impl ScoreType {
     /// Return whether this score can be taken from the current hand
-    fn _is_valid(&self, _hand: &Hand) -> bool {
+    fn is_valid(&self, _hand: &Hand) -> bool {
         use ScoreType::*;
         match self {
             Ones(_) | Twos(_) | Threes(_) | Fours(_) | Fives(_) | Sixes(_) => true,
@@ -57,6 +57,7 @@ impl ScoreType {
         }
     }
 }
+*/
 
 /// A single score option
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -227,7 +228,7 @@ impl Widget for Die {
         button.set_onclick(Callback::from(move || -> FiveDiceMessage {
             FiveDiceMessage::HoldDie(id)
         }));
-        button.set_size(VALUES.die_dimension, VALUES.die_dimension);
+        button.set_size(50.0, 50.0);
         ret.push_current_row(Box::new(button));
         ret
     }
@@ -290,7 +291,7 @@ impl Widget for Hand {
             ret.push_current_row(Box::new(*die));
         }
         // TODO the reroll button only picks up clicks on the bottom half of the button
-        let mut button = Button::new(VALUES.reroll_button_text);
+        let mut button = Button::new("Roll!");
         button.set_onclick(Callback::from(|| -> Self::MSG {
             FiveDiceMessage::RollDice
         }));

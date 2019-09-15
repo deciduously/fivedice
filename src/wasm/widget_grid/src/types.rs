@@ -1,4 +1,6 @@
-use crate::{fmt, AddAssign, FromStr, JsValue, Ordering, Rc, Result, WindowError, VALUES};
+use crate::error::{Result, WindowError};
+use std::{cmp::Ordering, fmt, ops::AddAssign, rc::Rc, str::FromStr};
+use wasm_bindgen::JsValue;
 
 /// Callback type
 // thanks to https://github.com/yewstack/yew/blob/master/src/callback.rs with some differences
@@ -73,6 +75,46 @@ impl FromStr for Color {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum FontStyle {
+    Arial,
+}
+
+impl Default for FontStyle {
+    fn default() -> Self {
+        Self::Arial
+    }
+}
+
+/// A font style and size
+#[derive(Debug, Clone, Copy)]
+pub struct Font {
+    size: u8,
+    style: FontStyle,
+}
+
+impl Font {
+    // Getter for font size as float
+    pub fn height(self) -> f64 {
+        f64::from(self.size)
+    }
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Self {
+            size: 16,
+            style: FontStyle::default(),
+        }
+    }
+}
+
+impl fmt::Display for Font {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}px {:?}", self.size, self.style)
+    }
+}
+
 /// A single coordinate point on the canvas, top left is 0,0
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
@@ -81,20 +123,15 @@ pub struct Point {
 }
 
 impl Point {
-    /// Set to point, specifically on canvas
+    /// Set to new point
     pub fn set_to(&mut self, p: Point) -> Result<()> {
-        if !VALUES.fits_canvas(p) {
-            Err(WindowError::OutOfBounds(*self, p))
-        } else {
-            self.x = p.x;
-            self.y = p.y;
-            Ok(())
-        }
+        self.x = p.x;
+        self.y = p.y;
+        Ok(())
     }
     /// Horizontal offset
     pub fn horiz_offset(&mut self, offset: f64) -> Result<()> {
-        self.set_to((self.x + offset, self.y).into())?;
-        Ok(())
+        self.set_to((self.x + offset, self.y).into())
     }
     /// Vertical offset
     pub fn vert_offset(&mut self, offset: f64) -> Result<()> {
@@ -288,5 +325,31 @@ impl From<(Point, f64, f64)> for Region {
 impl From<(f64, f64, f64, f64)> for Region {
     fn from(bits: (f64, f64, f64, f64)) -> Self {
         ((bits.0, bits.1).into(), bits.2, bits.3).into()
+    }
+}
+
+// Values configuration
+
+/// Layout values
+#[derive(Debug, Clone, Copy)]
+pub struct Values {
+    /// Total size of canvas (width, height)
+    pub canvas_region: Region,
+    /// Padding value between widgets
+    pub padding: f64,
+}
+
+impl Values {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Values {
+    fn default() -> Self {
+        Self {
+            canvas_region: (0.0, 0.0, 800.0, 600.0).into(),
+            padding: 10.0,
+        }
     }
 }

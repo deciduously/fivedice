@@ -1,10 +1,11 @@
-use crate::Point;
+use crate::types::Point;
 use std::fmt;
 use wasm_bindgen::JsValue;
 
 /// Window error type
 #[derive(Debug)]
 pub enum WindowError {
+    DomError(String),
     Element,
     JsVal(JsValue),
     OutOfBounds(Point, Point),
@@ -14,6 +15,7 @@ pub enum WindowError {
 impl fmt::Display for WindowError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::DomError(s) => write!(f, "DOM problem: {}", s),
             Self::Element => write!(f, "Could not append element to DOM"),
             Self::JsVal(js) => write!(f, "{:#?}", js),
             Self::Text => write!(f, "Could not add text to the window"),

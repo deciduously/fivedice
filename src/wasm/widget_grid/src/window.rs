@@ -1,15 +1,19 @@
 use crate::{
-    ffi::{get_body, get_canvas, get_context, get_document, request_animation_frame},
+    error::{Result, WindowError},
+    ffi::{body, canvas, ctx, document, request_animation_frame},
     traits::Widget,
-    {AsRef, Closure, Color, JsCast, Point, Rc, Region, Result, WindowError, VALUES},
+    types::{Color, Point, Region, Values},
 };
-use std::{cell::RefCell, collections::VecDeque};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{console, CanvasRenderingContext2d, MouseEvent};
 
 /// Trait representing a canvas to be drawn to.  For now, only supports CanvasRenderingContext2d
 pub trait Window {
     /// Blank the window
     fn blank(&self);
+    // Get the constant values for this window
+    fn get_values(&self) -> Values;
     /// Draw a rectangle
     fn rect(&self, region: Region, color: Color);
     /// Begin/rest a path - should we let the engine handle this??
@@ -32,40 +36,65 @@ pub type WindowPtr = Rc<Box<dyn Window>>;
 /// Canvas implementation for WebSys
 pub struct WebSysCanvas {
     ctx: CanvasRenderingContext2d,
+    values: Values,
 }
 
 impl WebSysCanvas {
     pub fn new(title: &str) -> Result<Self> {
+        console_error_panic_hook::set_once();
+        // set up Values
+        let values = Values::default();
         // Set up page
-        let document = get_document();
-        let body = get_body();
+        let document = document();
+        let body = body();
         // Mount the title and canvas elements
         append_text_element_attrs!(document, body, "h1", title,);
         append_element_attrs!(
             document,
             body,
             "canvas",
-            ("width", &format!("{}", VALUES.canvas_size.0)),
-            ("height", &format!("{}", VALUES.canvas_size.1))
+            ("width", &format!("{}", values.canvas_region.width())),
+            ("height", &format!("{}", values.canvas_region.height()))
         );
+        // Add click listener
+        // translate from page coords to canvas coords
+        // https://rustwasm.github.io/book/game-of-life/interactivity.html but in Rust, not JS
+        let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
+            let canvas = canvas();
+            let bounding_rect = canvas.get_bounding_client_rect();
+            let scale_x = f64::from(canvas.width()) / bounding_rect.width();
+            let scale_y = f64::from(canvas.height()) / bounding_rect.height();
 
+            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
+            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
+
+            let click: Point = (canvas_x, canvas_y).into();
+            CLICKS.with(|cs| cs.borrow_mut().push_back(click));
+        }) as Box<dyn FnMut(_)>);
+        canvas()
+            .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
+            .expect("Should register event listener");
+        callback.forget();
         Ok(Self::default())
     }
 }
 
 impl Default for WebSysCanvas {
     fn default() -> Self {
-        Self { ctx: get_context() }
+        Self {
+            ctx: ctx(),
+            values: Values::default(),
+        }
     }
 }
+
 impl Window for WebSysCanvas {
     fn blank(&self) {
-        self.ctx.clear_rect(
-            0.0,
-            0.0,
-            VALUES.canvas_size.0.into(),
-            VALUES.canvas_size.1.into(),
-        )
+        let r = self.get_values().canvas_region;
+        self.ctx.clear_rect(0.0, 0.0, r.width(), r.height());
+    }
+    fn get_values(&self) -> Values {
+        self.values
     }
     fn rect(&self, region: Region, color: Color) {
         self.set_color(color);
@@ -104,7 +133,7 @@ impl Window for WebSysCanvas {
 // Static holder for clicks
 // TODO - probably doesn't need to be a queue
 // The odds of a user registering multiple distinct clicks in a frame are next to none
-// Especially becuse it just gets drained to a Vec for processing anyway
+// Especially because it just gets drained to a Vec for processing anyway
 thread_local! {
     static CLICKS: RefCell<VecDeque<Point>> = RefCell::new(VecDeque::new());
 }
@@ -119,34 +148,10 @@ pub struct WindowEngine<T: 'static> {
 
 impl<T> WindowEngine<T> {
     pub fn new(w: Box<dyn Window>, element: Box<dyn Widget<MSG = T>>) -> Self {
-        console_error_panic_hook::set_once();
-        let window = Rc::new(w);
-        // Add click listener
-        // translate from page coords to canvas coords
-        // https://rustwasm.github.io/book/game-of-life/interactivity.html but in Rust, not JS
-        let callback = Closure::wrap(Box::new(move |evt: MouseEvent| {
-            let canvas = get_canvas();
-            let bounding_rect = canvas.get_bounding_client_rect();
-            let scale_x = f64::from(canvas.width()) / bounding_rect.width();
-            let scale_y = f64::from(canvas.height()) / bounding_rect.height();
-
-            let canvas_x = (f64::from(evt.client_x()) - bounding_rect.left()) * scale_x;
-            let canvas_y = (f64::from(evt.client_y()) - bounding_rect.top()) * scale_y;
-
-            let click: Point = (canvas_x, canvas_y).into();
-            //console::log_2(
-            //    &"JS callback click at ".into(),
-            //    &format!("{}", click).into(),
-            //);
-            CLICKS.with(|cs| cs.borrow_mut().push_back(click));
-        }) as Box<dyn FnMut(_)>);
-
-        // TODO maybe the struct should hold the CanvasElement?  Avoid this get_canvas()?
-        get_canvas()
-            .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())
-            .expect("Should register event listener");
-        callback.forget();
-        Self { window, element }
+        Self {
+            window: Rc::new(w),
+            element,
+        }
     }
 
     /// Draw elements

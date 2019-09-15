@@ -1,10 +1,10 @@
 use crate::{
+    error::Result,
     traits::{Drawable, MountedWidget, Widget},
-    types::Callback,
+    types::{Callback, Color, Font, Point, Region},
     window::WindowPtr,
-    {Color, Point, Rc, Region, Result, VALUES},
 };
-use std::{marker::PhantomData, str::FromStr};
+use std::{marker::PhantomData, rc::Rc, str::FromStr};
 //
 // Reusable Drawables
 //
@@ -12,15 +12,15 @@ use std::{marker::PhantomData, str::FromStr};
 /// A widget that just draws some text
 pub struct Text<T> {
     phantom: PhantomData<T>,
+    font: Font,
     text: String,
 }
 
 impl<T> Text<T> {
     pub fn new(s: &str) -> Self {
-        Self {
-            phantom: PhantomData,
-            text: s.into(),
-        }
+        let mut ret = Self::default();
+        ret.text = s.into();
+        ret
     }
 }
 
@@ -28,7 +28,18 @@ impl<T> Clone for Text<T> {
     fn clone(&self) -> Self {
         Self {
             phantom: PhantomData,
+            font: self.font,
             text: self.text.clone(),
+        }
+    }
+}
+
+impl<T> Default for Text<T> {
+    fn default() -> Self {
+        Self {
+            font: Font::default(),
+            phantom: PhantomData,
+            text: String::new(),
         }
     }
 }
@@ -36,18 +47,13 @@ impl<T> Clone for Text<T> {
 impl<T> Drawable for Text<T> {
     fn draw_at(&self, top_left: Point, w: WindowPtr) -> Result<Point> {
         w.begin_path();
-        w.text(&self.text, &VALUES.get_font_string(), top_left)?;
+        w.text(&self.text, &format!("{}", self.font), top_left)?;
         w.draw_path();
         Ok(Drawable::get_region(self, top_left, w)?.bottom_right())
     }
 
     fn get_region(&self, top_left: Point, w: WindowPtr) -> Result<Region> {
-        Ok((
-            top_left,
-            w.text_width(&self.text)?,
-            f64::from(VALUES.font_size),
-        )
-            .into())
+        Ok((top_left, w.text_width(&self.text)?, self.font.height()).into())
     }
 }
 
@@ -70,6 +76,7 @@ pub struct Button<T> {
     bottom_right: Option<Point>,
     callback: Option<Callback<T>>,
     color: Color,
+    font: Font,
     text: String,
 }
 
@@ -125,6 +132,7 @@ impl<T> Default for Button<T> {
             bottom_right: None,
             callback: None,
             color: Color::from_str("black").unwrap(),
+            font: Font::default(),
             text: "".into(),
         }
     }
@@ -137,10 +145,10 @@ impl<T> Drawable for Button<T> {
         w.rect(outline, self.color);
         w.text(
             &self.text,
-            &VALUES.get_font_string(),
+            &format!("{}", self.font),
             (
-                top_left.x + (VALUES.padding / 2.0),
-                top_left.y + (VALUES.padding * 2.0),
+                top_left.x + (w.get_values().padding / 2.0),
+                top_left.y + (w.get_values().padding * 2.0),
             )
                 .into(),
         )?;
@@ -153,8 +161,8 @@ impl<T> Drawable for Button<T> {
             Some(p) => Ok((top_left, p.x, p.y).into()),
             None => Ok((
                 top_left,
-                w.text_width(&self.text)? + VALUES.padding,
-                f64::from(VALUES.font_size) + VALUES.padding * 2.0,
+                w.text_width(&self.text)? + w.get_values().padding,
+                self.font.height() + w.get_values().padding * 2.0,
             )
                 .into()),
         }

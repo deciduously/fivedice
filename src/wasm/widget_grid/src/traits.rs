@@ -1,8 +1,11 @@
 use crate::{
+    error::Result,
+    types::{Point, Region},
     window::WindowPtr,
-    {fmt, Point, Region, Result, VALUES},
 };
-use std::rc::Rc;
+
+use std::{fmt, rc::Rc};
+//use web_sys::console;
 // TODO YOU CAN IMPL TRAIT FOR BOX<dyn TRAIT>
 // it should also be able to auto-derive get_region(), that's a solved problem
 
@@ -59,6 +62,7 @@ impl<T> MountedWidget<T> {
         let mut cursor = self.top_left;
         let mut bottom_right = self.top_left;
         let mut vertical_offset = 0.0;
+        let values = w.get_values();
         for row in &self.children {
             let row_top_left = cursor;
             // Draw each child
@@ -72,17 +76,10 @@ impl<T> MountedWidget<T> {
                     mounted_child.get_region(Rc::clone(&w))?.bottom_right();
 
                 // if bottom right is off the screen, move to the next line instead
-                let canvas_region: Region = (
-                    0.0,
-                    0.0,
-                    f64::from(VALUES.canvas_size.0),
-                    f64::from(VALUES.canvas_size.1),
-                )
-                    .into();
-                if !canvas_region.contains(child_bottom_right) {
+                if !values.canvas_region.contains(child_bottom_right) {
                     child_top_left = (
-                        VALUES.padding,
-                        (child_bottom_right.y - child_top_left.y) + VALUES.padding + cursor.y,
+                        values.padding,
+                        (child_bottom_right.y - child_top_left.y) + values.padding + cursor.y,
                     )
                         .into();
                     mounted_child = child.mount_widget(child_top_left);
@@ -100,11 +97,11 @@ impl<T> MountedWidget<T> {
                     bottom_right = child_bottom_right;
                 }
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                cursor.horiz_offset(VALUES.padding)?;
+                cursor.horiz_offset(values.padding)?;
             }
             // advance the cursor back to the beginning of the next line down
-            cursor.vert_offset((VALUES.padding * 2.0) + vertical_offset)?;
-            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+            cursor.vert_offset((values.padding * 2.0) + vertical_offset)?;
+            cursor.horiz_offset(-(cursor.x - values.padding))?;
         }
         // draw self, if present
         if let Some(d) = &self.drawable {
@@ -153,7 +150,7 @@ impl<T> MountedWidget<T> {
                         bottom_right = region.bottom_right();
                     }
                     cursor.vert_offset(-(cursor.y - child_top_left.y))?;
-                    cursor.horiz_offset(VALUES.padding)?;
+                    cursor.horiz_offset(w.get_values().padding)?;
                 }
             }
             Ok((self.top_left, bottom_right).into())
@@ -164,6 +161,7 @@ impl<T> MountedWidget<T> {
     pub fn click(&mut self, click: Point, w: WindowPtr) -> Result<Option<T>> {
         // iterate through widgets, handle all their clicks, handle drawable's click
         let mut cursor = self.top_left;
+        let values = w.get_values();
         for row in self.children.iter_mut() {
             for child in row.iter_mut() {
                 let child_top_left = cursor;
@@ -181,10 +179,11 @@ impl<T> MountedWidget<T> {
                 )?;
                 cursor.vert_offset(-(cursor.y - child_top_left.y))?;
                 // if the horizontal scroll fails, set to next row down instead
-                cursor.horiz_offset(VALUES.padding)?;
+                cursor.horiz_offset(values.padding)?;
             }
-            cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
-            cursor.horiz_offset(-(cursor.x - VALUES.padding))?;
+            // TODO this is now BROKEN, VALUES.die_dimension was always wrong
+            // cursor.vert_offset(VALUES.padding + VALUES.die_dimension + VALUES.padding)?;
+            cursor.horiz_offset(-(cursor.x - values.padding))?;
         }
         Ok(None)
     }

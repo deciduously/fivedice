@@ -24,4 +24,5 @@ crate-type = ["cdylib"]
 path = "src/wasm/lib.rs"
 
 [profile.release]
+debug = true # TODO remove
 lto = true
